@@ -1,0 +1,5 @@
+# See root .gitignore for main patterns
+.next/
+out/
+node_modules/
+.env*.local

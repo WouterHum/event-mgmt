@@ -42,3 +42,6 @@
 # IDE
 .vscode/
 .idea/
+# pnpm
+.pnpm-store/
+**/.pnpm-store/
