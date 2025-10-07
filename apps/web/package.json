@@ -6,6 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
+    "export": "next export",
     "lint": "eslint",
     "dev:web": "next dev --turbopack",
     "dev:api": "cd ../api && uvicorn app.main:app --reload --port 8000",
