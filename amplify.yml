@@ -5,6 +5,7 @@ frontend:
       commands:
         - nvm install 22
         - nvm use 22
+        - npm install -g pnpm
         - cd apps/web
         - npm install
     build:
