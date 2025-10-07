@@ -11,26 +11,29 @@ import {
   Button,
 } from "@mui/material";
 import NavBar from "../components/NavBar";
+import { apiGet } from "@/lib/api"; // use the typed API wrapper
+
+// Define Attendee type
+interface Attendee {
+  id: number;
+  name: string;
+  email: string;
+}
 
 export default function AttendeesPage() {
-  const [attendees, setAttendees] = useState<any[]>([]);
-  const [message, setMessage] = useState("");
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [message, setMessage] = useState<string>("");
 
   const fetchAttendees = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return setMessage("Not logged in");
-
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/attendees`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!res.ok) throw new Error("Failed to load attendees");
-      setAttendees(await res.json());
-    } catch (err: any) {
-      setMessage(err.message);
+      const data = await apiGet<Attendee[]>("/api/attendees");
+      setAttendees(data);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setMessage(err.message);
+      } else {
+        setMessage("An unexpected error occurred");
+      }
     }
   };
 

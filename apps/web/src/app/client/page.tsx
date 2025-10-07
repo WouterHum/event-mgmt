@@ -1,6 +1,6 @@
 "use client";
 
-import { Typography, Grid, Card, CardContent, Button } from "@mui/material";
+import { Typography, Stack, Card, CardContent, Button } from "@mui/material";
 import NavBar from "../components/NavBar";
 
 export default function ClientDashboard() {
@@ -16,21 +16,29 @@ export default function ClientDashboard() {
     <div>
       <NavBar />
       <div className="p-6">
-        <Typography variant="h4" className="mb-6">Client Dashboard</Typography>
-        <Grid container spacing={2}>
+        <Typography variant="h4" className="mb-6">
+          Client Dashboard
+        </Typography>
+
+        <Stack direction="row" spacing={2} flexWrap="wrap">
           {tiles.map((t) => (
-            <Grid key={t.title} item xs={12} sm={6} md={4}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6">{t.title}</Typography>
-                  <Button href={t.href} variant="outlined">Open</Button>
-                </CardContent>
-              </Card>
-            </Grid>
+            <Card
+              key={t.title}
+              sx={{
+                width: { xs: "100%", sm: "48%", md: "30%" },
+                mb: 2,
+              }}
+            >
+              <CardContent className="flex flex-col gap-4">
+                <Typography variant="h6">{t.title}</Typography>
+                <Button href={t.href} variant="outlined">
+                  Open
+                </Button>
+              </CardContent>
+            </Card>
           ))}
-        </Grid>
+        </Stack>
       </div>
     </div>
   );
 }
- 

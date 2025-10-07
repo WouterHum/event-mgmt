@@ -42,8 +42,12 @@ export default function HomePage() {
 
       // redirect to dashboard
       router.push("/dashboard");
-    } catch (err: any) {
-      setMessage(err.message || "Login failed");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setMessage(err.message);
+      } else {
+        setMessage("An unexpected error occurred");
+      }
     }
   };
 

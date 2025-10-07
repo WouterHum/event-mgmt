@@ -11,26 +11,29 @@ import {
   Button,
 } from "@mui/material";
 import NavBar from "../components/NavBar";
+import { apiGet } from "@/lib/api"; // typed API wrapper
+
+// Define Speaker type
+interface Speaker {
+  id: number;
+  name: string;
+  email: string;
+}
 
 export default function SpeakersPage() {
-  const [speakers, setSpeakers] = useState<any[]>([]);
-  const [message, setMessage] = useState("");
+  const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  const [message, setMessage] = useState<string>("");
 
   const fetchSpeakers = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return setMessage("Not logged in");
-
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/speakers`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!res.ok) throw new Error("Failed to load speakers");
-      setSpeakers(await res.json());
-    } catch (err: any) {
-      setMessage(err.message);
+      const data = await apiGet<Speaker[]>("/api/speakers");
+      setSpeakers(data);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setMessage(err.message);
+      } else {
+        setMessage("An unexpected error occurred");
+      }
     }
   };
 

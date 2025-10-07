@@ -10,17 +10,32 @@ import {
 import NavBar from "../components/NavBar";
 import { useState } from "react";
 
+// Define Delegate type
+interface Delegate {
+  id: number;
+  name: string;
+  session_title: string;
+  venue: string;
+  time: string;
+  // Add other fields if needed
+}
+
 export default function UploaderDashboard() {
-  const [search, setSearch] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [search, setSearch] = useState<string>("");
+  const [result, setResult] = useState<Delegate | null>(null);
 
   const handleSearch = async () => {
-    // Call backend API: /api/delegates?name=${search}
-    const res = await fetch(
-      `/api/delegates?name=${encodeURIComponent(search)}`
-    );
-    if (res.ok) {
-      setResult(await res.json());
+    try {
+      const res = await fetch(
+        `/api/delegates?name=${encodeURIComponent(search)}`
+      );
+      if (!res.ok) throw new Error("Failed to fetch delegate");
+
+      const data: Delegate = await res.json();
+      setResult(data);
+    } catch (err: unknown) {
+      console.error(err);
+      setResult(null);
     }
   };
 

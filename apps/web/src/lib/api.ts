@@ -5,7 +5,7 @@ import { getDefaultStore } from "jotai";
 
 const store = getDefaultStore();
 
-function getAuthToken() {
+function getAuthToken(): string | null {
   const auth = store.get(authAtom);
   return auth?.token || null;
 }
@@ -16,7 +16,11 @@ export function saveAuth(token: string, role: string, email: string) {
   }
 }
 
-export function loadAuth() {
+export function loadAuth(): {
+  token: string;
+  role: string;
+  email: string;
+} | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("auth");
   if (!raw) return null;
@@ -28,43 +32,84 @@ export function loadAuth() {
 }
 
 // --- API fetch wrappers ---
-export async function apiGet(path: string) {
+
+// GET
+export async function apiGet<TResponse = unknown>(
+  path: string
+): Promise<TResponse> {
   const token = getAuthToken();
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText);
+  }
+
+  return (await res.json()) as TResponse;
 }
 
-export async function apiPost(path: string, body: any) {
+// POST
+export async function apiPost<TRequest, TResponse = unknown>(
+  path: string,
+  body: TRequest
+): Promise<TResponse> {
   const token = getAuthToken();
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText);
+  }
+
+  return (await res.json()) as TResponse;
 }
 
-export async function apiPut(path: string, body: any) {
+// PUT
+export async function apiPut<TRequest, TResponse = unknown>(
+  path: string,
+  body: TRequest
+): Promise<TResponse> {
   const token = getAuthToken();
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText);
+  }
+
+  return (await res.json()) as TResponse;
 }
 
-export async function apiDelete(path: string) {
+// DELETE
+export async function apiDelete<TResponse = unknown>(
+  path: string
+): Promise<TResponse> {
   const token = getAuthToken();
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText);
+  }
+
+  return (await res.json()) as TResponse;
 }

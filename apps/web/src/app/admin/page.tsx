@@ -1,10 +1,15 @@
 "use client";
 
-import { Typography, Grid, Card, CardContent, Button } from "@mui/material";
+import { Stack, Card, CardContent, Button, Typography } from "@mui/material";
 import NavBar from "../components/NavBar";
 
+interface Tile {
+  title: string;
+  href: string;
+}
+
 export default function AdminDashboard() {
-  const tiles = [
+  const tiles: Tile[] = [
     { title: "Manage Events", href: "/events" },
     { title: "Manage Speakers", href: "/speakers" },
     { title: "Manage Rooms", href: "/rooms" },
@@ -19,20 +24,22 @@ export default function AdminDashboard() {
         <Typography variant="h4" className="mb-6">
           Admin Dashboard
         </Typography>
-        <Grid container spacing={2}>
-          {tiles.map((t) => (
-            <Grid key={t.title} item xs={12} sm={6} md={4}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6">{t.title}</Typography>
-                  <Button href={t.href} variant="outlined">
-                    Open
-                  </Button>
-                </CardContent>
-              </Card>
-            </Grid>
+        <Stack direction="row" spacing={2} flexWrap="wrap">
+          {tiles.map(tile => (
+            <Card
+              key={tile.title}
+              sx={{
+                width: { xs: '100%', sm: '48%', md: '30%' },
+                mb: 2
+              }}
+            >
+              <CardContent>
+                <Typography variant="h6">{tile.title}</Typography>
+                <Button href={tile.href} variant="outlined">Open</Button>
+              </CardContent>
+            </Card>
           ))}
-        </Grid>
+        </Stack>
       </div>
     </div>
   );

@@ -11,23 +11,29 @@ import {
   Button,
 } from "@mui/material";
 import NavBar from "../components/NavBar";
+import { apiGet } from "@/lib/api"; // typed API wrapper
+
+// Define Room type
+interface Room {
+  id: number;
+  name: string;
+  capacity: number;
+}
 
 export default function RoomsPage() {
-  const [rooms, setRooms] = useState<any[]>([]);
-  const [message, setMessage] = useState("");
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [message, setMessage] = useState<string>("");
 
   const fetchRooms = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return setMessage("Not logged in");
-
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rooms`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to load rooms");
-      setRooms(await res.json());
-    } catch (err: any) {
-      setMessage(err.message);
+      const data = await apiGet<Room[]>("/api/rooms");
+      setRooms(data);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setMessage(err.message);
+      } else {
+        setMessage("An unexpected error occurred");
+      }
     }
   };
 

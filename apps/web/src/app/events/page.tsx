@@ -19,14 +19,26 @@ import NavBar from "../components/NavBar";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 
+// Define the Event type
+interface Event {
+  id: number;
+  title: string;
+  description: string;
+  start_time: string; // Keep as string if using datetime-local
+  end_time: string;
+  location: string;
+}
+
 export default function EventsPage() {
   const auth = useAuthGuard();
-  const [events, setEvents] = useState<any[]>([]);
-  const [message, setMessage] = useState("");
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any | null>(null);
 
-  const [form, setForm] = useState({
+  // Typed state
+  const [events, setEvents] = useState<Event[]>([]);
+  const [message, setMessage] = useState<string>("");
+  const [open, setOpen] = useState<boolean>(false);
+  const [editing, setEditing] = useState<Event | null>(null);
+
+  const [form, setForm] = useState<Omit<Event, "id">>({
     title: "",
     description: "",
     start_time: "",
@@ -34,32 +46,51 @@ export default function EventsPage() {
     location: "",
   });
 
+  // Load events from API
   const loadEvents = async () => {
     try {
-      const data = await apiGet("/api/events");
+      const data: Event[] = await apiGet("/api/events");
       setEvents(data);
-    } catch (err: any) {
-      setMessage(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setMessage(err.message);
+      } else {
+        setMessage("An unexpected error occurred");
+      }
     }
   };
 
-   useEffect(() => {
+  useEffect(() => {
     if (auth.ready && auth.token) {
       loadEvents();
     }
   }, [auth.ready, auth.token]);
 
-  const handleOpen = (event?: any) => {
+  // Open dialog to add/edit event
+  const handleOpen = (event?: Event) => {
     if (event) {
       setEditing(event);
-      setForm(event);
+      setForm({
+        title: event.title,
+        description: event.description,
+        start_time: event.start_time,
+        end_time: event.end_time,
+        location: event.location,
+      });
     } else {
       setEditing(null);
-      setForm({ title: "", description: "", start_time: "", end_time: "", location: "" });
+      setForm({
+        title: "",
+        description: "",
+        start_time: "",
+        end_time: "",
+        location: "",
+      });
     }
     setOpen(true);
   };
 
+  // Save event (add or edit)
   const handleSave = async () => {
     try {
       if (editing) {
@@ -69,17 +100,26 @@ export default function EventsPage() {
       }
       setOpen(false);
       loadEvents();
-    } catch (err: any) {
-      setMessage(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setMessage(err.message);
+      } else {
+        setMessage("An unexpected error occurred");
+      }
     }
   };
 
+  // Delete event
   const handleDelete = async (id: number) => {
     try {
       await apiDelete(`/api/events/${id}`);
       loadEvents();
-    } catch (err: any) {
-      setMessage(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setMessage(err.message);
+      } else {
+        setMessage("An unexpected error occurred");
+      }
     }
   };
 
@@ -90,7 +130,12 @@ export default function EventsPage() {
         <Typography variant="h4" className="mb-4">
           Events
         </Typography>
-        <Button variant="contained" color="primary" className="mb-4" onClick={() => handleOpen()}>
+        <Button
+          variant="contained"
+          color="primary"
+          className="mb-4"
+          onClick={() => handleOpen()}
+        >
           Add Event
         </Button>
         <Card>
@@ -106,7 +151,11 @@ export default function EventsPage() {
                     <Button size="small" onClick={() => handleOpen(evt)}>
                       Edit
                     </Button>
-                    <Button size="small" color="error" onClick={() => handleDelete(evt.id)}>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => handleDelete(evt.id)}
+                    >
                       Delete
                     </Button>
                   </ListItem>
@@ -121,7 +170,12 @@ export default function EventsPage() {
       </div>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>{editing ? "Edit Event" : "Add Event"}</DialogTitle>
         <DialogContent className="flex flex-col gap-4 mt-2">
           <TextField
