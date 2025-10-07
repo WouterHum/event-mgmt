@@ -2,10 +2,10 @@
 CREATE DATABASE IF NOT EXISTS event_mgmt CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Create application user
-CREATE USER IF NOT EXISTS 'event_user'@'%' IDENTIFIED BY 'StrongPassword123!';
+CREATE USER IF NOT EXISTS 'eventuser'@'%' IDENTIFIED BY 'StrongPassword123!';
 
 -- Grant privileges
-GRANT ALL PRIVILEGES ON event_mgmt.* TO 'event_user'@'%';
+GRANT ALL PRIVILEGES ON event_mgmt.* TO 'eventuser'@'%';
 FLUSH PRIVILEGES;
 
 -- Switch to the new DB
