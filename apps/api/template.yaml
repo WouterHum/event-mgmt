@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/awslabs/goformation/master/schema/sam.schema.json
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: FastAPI Application
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.13
+    Environment:
+      Variables:
+        ENVIRONMENT: production
+
+Resources:
+  FastAPIFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: app.main.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        RootEvent:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+      Environment:
+        Variables:
+          DB_HOST: !Sub "{{resolve:ssm:/event-mgmt-api/db/host:1}}"
+          DB_NAME: !Sub "{{resolve:ssm:/event-mgmt-api/db/name:1}}"
+          DB_USER: !Sub "{{resolve:ssm:/event-mgmt-api/db/user:1}}"
+          #DB_PASSWORD: !Sub "{{resolve:ssm-secure:/event-mgmt-api/db/password:1}}"
+          DB_PORT: '3306'
+          #AWS_REGION: af-south-1
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParameters
+              Resource: 
+                - 'arn:aws:ssm:*:*:parameter/myapp/*'
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: 
+      Fn::Sub: 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/'
+    Export:
+      Name: FastAPIEndpoint
