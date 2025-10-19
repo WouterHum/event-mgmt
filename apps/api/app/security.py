@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 from passlib.hash import bcrypt
 import jwt
-from .config import settings
+from .config import get_settings
+
+settings = get_settings()
 
 def hash_password(pw: str) -> str:
     return bcrypt.hash(pw)
