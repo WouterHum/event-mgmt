@@ -1,0 +1,223 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { Event } from "@/types";
+
+export default function EventsPageContent() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Event | null>(null);
+  const [form, setForm] = useState<Event>({ title: "", description: "" });
+
+  const load = async () => {
+    try {
+      const data = await apiGet<Event[]>("/api/events");
+      setEvents(data);
+    } catch (err) {
+      console.error("Failed to load events:", err);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const save = async () => {
+    try {
+      if (editing && editing.id)
+        await apiPut(`/api/events/${editing.id}`, form);
+      else await apiPost("/api/events", form);
+      await load();
+      setOpen(false);
+      setEditing(null);
+      setForm({ title: "", description: "" });
+    } catch (err) {
+      console.error("Failed to save event:", err);
+    }
+  };
+
+  const remove = async (id?: number) => {
+    if (!id) return;
+    try {
+      await apiDelete(`/api/events/${id}`);
+      await load();
+    } catch (err) {
+      console.error("Failed to delete event:", err);
+    }
+  };
+
+  const exportCsv = () => {
+    window.location.href = `${
+      process.env.NEXT_PUBLIC_API_URL || ""
+    }/api/events/export`;
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground py-12">
+      <div className="max-w-4xl mx-auto px-4">
+        <header className="mb-10 text-center">
+          <h1 className="text-4xl font-bold mb-2">Events</h1>
+          <p className="text-muted-foreground">
+            Create and manage conference events
+          </p>
+        </header>
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 mb-8 justify-center">
+          <button
+            onClick={() => {
+              setEditing(null);
+              setForm({ title: "", description: "" });
+              setOpen(true);
+            }}
+            className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium shadow-sm hover:bg-primary/90 transition-all"
+          >
+            + Add Event
+          </button>
+          <button
+            onClick={exportCsv}
+            className="inline-flex items-center justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-foreground bg-card hover:bg-muted transition-all"
+          >
+            Export CSV
+          </button>
+        </div>
+
+        {/* Events List */}
+        <div className="bg-card border border-gray-200 rounded-2xl shadow-sm divide-y divide-gray-200">
+          {events.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">
+              No events found.
+            </p>
+          ) : (
+            events.map((e) => (
+              <div
+                key={e.id}
+                className="flex items-center justify-between px-6 py-4 hover:bg-muted transition-all"
+              >
+                <div>
+                  <h3 className="text-base font-semibold">{e.title}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {e.start_time
+                      ? `${e.start_time} @ ${e.location || "TBA"}`
+                      : e.location || "No location"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setEditing(e);
+                      setForm(e);
+                      setOpen(true);
+                    }}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-foreground bg-card hover:bg-muted transition-all"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => remove(e.id)}
+                    className="rounded-md border border-red-300 text-red-600 px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 transition-all"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Dialog */}
+      {open && (
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg mx-4">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h2 className="text-lg font-semibold">
+                {editing ? "Edit Event" : "Add Event"}
+              </h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Title</label>
+                <input
+                  type="text"
+                  value={form.title || ""}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={form.description || ""}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Start
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={form.start_time || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, start_time: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">End</label>
+                  <input
+                    type="datetime-local"
+                    value={form.end_time || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, end_time: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={form.location || ""}
+                  onChange={(e) =>
+                    setForm({ ...form, location: e.target.value })
+                  }
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+            </div>
+            <div className="border-t border-gray-200 px-6 py-4 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  setEditing(null);
+                }}
+                className="px-4 py-2 rounded-md border border-gray-300 text-sm text-foreground bg-card hover:bg-muted transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={save}
+                className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-all"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

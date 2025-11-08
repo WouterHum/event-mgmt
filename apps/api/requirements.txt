@@ -1,46 +1,30 @@
-# Core framework
-fastapi==0.116.1
-uvicorn[standard]==0.35.0
-starlette==0.47.3
-
-# Database
-SQLAlchemy==2.0.43
-PyMySQL==1.1.2
-alembic==1.16.5
-cryptography==42.0.8
-
-# Auth & Security
+boto3==1.35.93
+boto3-stubs==1.40.50
+fastapi==0.115.6
+fastapi-cli==0.0.7
+mangum==0.19.0
+mypy-boto3-apigateway==1.40.0
+mypy-boto3-cloudformation==1.40.44
+mypy-boto3-ecr==1.40.0
+mypy-boto3-iam==1.40.0
+mypy-boto3-kinesis==1.40.0
+mypy-boto3-lambda==1.40.50
+mypy-boto3-s3==1.40.26
+mypy-boto3-schemas==1.40.19
+mypy-boto3-secretsmanager==1.40.0
+mypy-boto3-signer==1.40.18
+mypy-boto3-sqs==1.40.35
+mypy-boto3-stepfunctions==1.40.0
+mypy-boto3-sts==1.40.0
+mypy-boto3-xray==1.40.21
 passlib[bcrypt]==1.7.4
-PyJWT==2.10.1
-python-multipart==0.0.20  # form data support
-python-dotenv==1.1.1      # load .env in dev
-
-# AWS S3 integration
-boto3==1.40.21
-botocore==1.40.21
-s3transfer==0.13.1
-jmespath==1.0.1
-
-# Validation & typing
-pydantic==2.11.7
-pydantic-settings==2.10.1
-typing-inspection==0.4.1
-typing_extensions==4.15.0
-annotated-types==0.7.0
-
-# Utils
-python-dateutil==2.9.0.post0
-PyYAML==6.0.2
-anyio==4.10.0
-httpx==0.28.1
-httpcore==1.0.9
-httptools==0.6.4
-websockets==15.0.1
-watchfiles==1.1.0
-colorama==0.4.6
-click==8.2.1
-idna==3.10
-certifi==2025.8.3
-urllib3==2.5.0
-six==1.17.0
-greenlet==3.2.4
+bcrypt==4.2.0
+pydantic==2.10.3
+pydantic-extra-types==2.10.1
+pydantic-settings==2.7.0
+pydantic_core==2.27.1
+PyMySQL==1.1.1
+python-jose==3.3.0
+python-multipart==0.0.17
+SQLAlchemy==2.0.35
+PyJWT==2.9.0

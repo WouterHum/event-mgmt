@@ -10,8 +10,8 @@ Full-stack app built with:
 ## Local Development
 
 Backend build
-
-sam deploy --stack-name event-mgmt-api --s3-bucket fastapi-deployment-861276123022 --capabilities CAPABILITY_IAMH
+needs to be in api folder
+sam deploy --stack-name event-mgmt-api --s3-bucket fastapi-deployment-861276123022 --capabilities CAPABILITY_IAM
 
 Front end build
 

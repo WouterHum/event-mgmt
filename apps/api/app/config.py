@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     environment: str = os.getenv("ENVIRONMENT", "local")
     ENV: str = "local"
     SECRET_KEY: str = "dev-secret-change"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     MYSQL_HOST: str = os.getenv("MYSQL_HOST", "Wouter_Laptop")
     MYSQL_PORT: int = int(os.getenv("MYSQL_PORT", "3306"))

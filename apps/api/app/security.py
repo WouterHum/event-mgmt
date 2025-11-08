@@ -18,3 +18,10 @@ def create_access_token(sub: str, role: str):
         "exp": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
+
+def create_refresh_token(data: dict):
+    expire = datetime.utcnow() + timedelta(days=30)
+    to_encode = data.copy()
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")

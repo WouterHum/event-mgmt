@@ -1,25 +1,13 @@
-"use client";
+import "./globals.css";
+import { Inter } from "next/font/google";
+const inter = Inter({ subsets: ["latin"] });
 
-import { useEffect } from "react";
-import { useSetAtom } from "jotai";
-import { authAtom } from "@/lib/auth";
-import { loadAuth } from "@/lib/api";
+export const metadata = { title: "Event Management", description: "Event Management UI" };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const setAuth = useSetAtom(authAtom);
-
-  useEffect(() => {
-    const saved = loadAuth();
-    if (saved) setAuth(saved);
-  }, [setAuth]);
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }

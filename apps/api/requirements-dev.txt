@@ -1,0 +1,16 @@
+-r requirements.txt
+boto3-stubs==1.40.50
+mypy-boto3-apigateway==1.40.0
+mypy-boto3-cloudformation==1.40.44
+mypy-boto3-ecr==1.40.0
+mypy-boto3-iam==1.40.0
+mypy-boto3-kinesis==1.40.0
+mypy-boto3-lambda==1.40.50
+mypy-boto3-s3==1.40.26
+mypy-boto3-schemas==1.40.19
+mypy-boto3-secretsmanager==1.40.0
+mypy-boto3-signer==1.40.18
+mypy-boto3-sqs==1.40.35
+mypy-boto3-stepfunctions==1.40.0
+mypy-boto3-sts==1.40.0
+mypy-boto3-xray==1.40.21

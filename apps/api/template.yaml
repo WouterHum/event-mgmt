@@ -12,6 +12,11 @@ Globals:
     Environment:
       Variables:
         ENVIRONMENT: production
+  Api:
+    Cors:
+      AllowOrigin: "'*'"
+      AllowHeaders: "'*'"
+      AllowMethods: "'*'"
 
 Resources:
   FastAPIFunction:
@@ -46,7 +51,7 @@ Resources:
                 - ssm:GetParameter
                 - ssm:GetParameters
               Resource: 
-                - 'arn:aws:ssm:*:*:parameter/myapp/*'
+                - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/event-mgmt-api/*'
 
 Outputs:
   ApiUrl:

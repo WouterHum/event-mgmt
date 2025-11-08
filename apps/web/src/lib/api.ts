@@ -1,29 +1,52 @@
 "use client";
 
-import { authAtom } from "./auth";
+import { authAtom } from "@/atoms/authAtom"; 
 import { getDefaultStore } from "jotai";
+import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 
 const store = getDefaultStore();
+const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-function getAuthToken(): string | null {
-  const auth = store.get(authAtom);
-  return auth?.token || null;
+export interface AuthData {
+  token: string;
+  role?: string | null;
+  email?: string | null;
 }
 
-export function saveAuth(token: string, role: string, email: string) {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("auth", JSON.stringify({ token, role, email }));
+const client = axios.create({
+  baseURL,
+  //headers: { "Content-Type": "application/json" },
+});
+
+// --- Auth Helpers ---
+
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null; // SSR safe
+
+  const auth = store.get(authAtom);
+  if (auth?.token) return auth.token;
+
+  const raw = localStorage.getItem("auth");
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed.token;
+  } catch {
+    return null;
   }
 }
 
-export function loadAuth(): {
-  token: string;
-  role: string;
-  email: string;
-} | null {
+export function saveAuth(token: string, role: string, email: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("auth", JSON.stringify({ token, role, email }));
+}
+
+export function loadAuth(): AuthData | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("auth");
   if (!raw) return null;
+
   try {
     return JSON.parse(raw);
   } catch {
@@ -31,85 +54,76 @@ export function loadAuth(): {
   }
 }
 
-// --- API fetch wrappers ---
-
-// GET
-export async function apiGet<TResponse = unknown>(
-  path: string
-): Promise<TResponse> {
-  const token = getAuthToken();
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(errorText);
-  }
-
-  return (await res.json()) as TResponse;
+export function setAuth(token: string | null) {
+  if (token) client.defaults.headers.common.Authorization = `Bearer ${token}`;
+  else delete client.defaults.headers.common.Authorization;
 }
 
-// POST
+// --- Axios response handler ---
+
+async function handleAxiosResponse<T>(promise: Promise<AxiosResponse<T>>): Promise<T> {
+  try {
+    const res = await promise;
+    return res.data;
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response) {
+      const msg = typeof err.response.data === "string"
+        ? err.response.data
+        : JSON.stringify(err.response.data);
+      throw new Error(msg);
+    }
+    throw err instanceof Error ? err : new Error("Unknown API error");
+  }
+}
+
+// --- API Helpers ---
+
+export async function apiGet<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  return handleAxiosResponse<T>(client.get(path, { ...config, headers }));
+}
+
 export async function apiPost<TRequest, TResponse = unknown>(
   path: string,
-  body: TRequest
+  data: TRequest,
+  config?: AxiosRequestConfig
 ): Promise<TResponse> {
   const token = getAuthToken();
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(errorText);
+  const headers = {
+    ...(data instanceof FormData ? {} : { "Content-Type": "application/json" }),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...config?.headers,
+  };
+  
+  // Debug logging
+  if (data instanceof FormData) {
+    console.log("Sending FormData:");
+    for (const pair of data.entries()) {
+      console.log(pair[0], pair[1]);
+    }
+    console.log("Headers:", headers);
   }
-
-  return (await res.json()) as TResponse;
+  
+  return handleAxiosResponse<TResponse>(
+    client.post(path, data, { ...config, headers })
+  );
 }
-
-// PUT
 export async function apiPut<TRequest, TResponse = unknown>(
   path: string,
-  body: TRequest
+  data: TRequest,
+  config?: AxiosRequestConfig
 ): Promise<TResponse> {
   const token = getAuthToken();
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(errorText);
-  }
-
-  return (await res.json()) as TResponse;
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  return handleAxiosResponse<TResponse>(client.put(path, data, { ...config, headers }));
 }
 
-// DELETE
 export async function apiDelete<TResponse = unknown>(
-  path: string
+  path: string,
+  config?: AxiosRequestConfig
 ): Promise<TResponse> {
   const token = getAuthToken();
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(errorText);
-  }
-
-  return (await res.json()) as TResponse;
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  return handleAxiosResponse<TResponse>(client.delete(path, { ...config, headers }));
 }

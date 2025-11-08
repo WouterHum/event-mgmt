@@ -11,6 +11,19 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(50), nullable=False)  # admin|technician|client|uploader
+    is_active = Column(Boolean, default=True)
+    
+    attendee_profile = relationship("Attendee", back_populates="user", uselist=False)
+    
+class Attendee(Base):
+    __tablename__ = "attendees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # optional link to User
+
+    user = relationship("User", back_populates="attendee_profile")
 
 class Event(Base):
     __tablename__ = "events"
@@ -28,14 +41,18 @@ class Room(Base):
     __tablename__ = "rooms"
     id = Column(Integer, primary_key=True)
     name = Column(String(255))
+    location = Column(String(255), nullable=True) 
     capacity = Column(Integer)
+    layout = Column(String(255), nullable=True)  
+    equipment = Column(Text, nullable=True) 
 
 class Speaker(Base):
     __tablename__ = "speakers"
     id = Column(Integer, primary_key=True)
-    full_name = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)
     title = Column(String(50))
     bio = Column(Text)
+    email = Column(String(255), unique=True, nullable=True)
 
 class Upload(Base):
     __tablename__ = "uploads"

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useAtom } from "jotai";
-import { authAtom } from "@/lib/auth";
+import { authAtom } from "@/atoms/authAtom"; 
 
 export default function Dashboard() {
   const [auth] = useAtom(authAtom);

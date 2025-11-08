@@ -1,31 +1,39 @@
 "use client";
 
-import { useAtom } from "jotai";
 import { useEffect, useState } from "react";
-import { authAtom } from "./auth";
-import { loadAuth } from "./api";
+import { useAtom } from "jotai";
+import { authAtom, AuthState } from "@/atoms/authAtom";
+import { loadAuth } from "@/lib/api"; 
+import { useRouter } from "next/navigation";
 
-export function useAuthGuard() {
+export function useAuthGuard(): AuthState & { checked: boolean } {
   const [auth, setAuth] = useAtom(authAtom);
-  const [ready, setReady] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    if (!auth.token) {
-      const saved = loadAuth();
-      if (saved) {
-        setAuth(saved); // ✅ hydrate from localStorage
-        setReady(true);
-        return;
-      }
+    const stored = loadAuth();
 
-      // no saved session, force login
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
+    if (stored && stored.token) {
+      setAuth({
+        token: stored.token,
+        role: stored.role ?? null,
+        email: stored.email ?? null,
+      });
+      setChecked(true);
     } else {
-      setReady(true);
+      setAuth({ token: null, role: null, email: null });
+      router.replace("/login");
+      setChecked(true);
     }
-  }, [auth.token, setAuth]);
+  }, [setAuth, router]); // ✅ reruns if auth changes
 
-  return { ...auth, ready };
+  // ✅ NEW: redirect again if token is cleared after login
+  useEffect(() => {
+    if (checked && !auth.token) {
+      router.replace("/login");
+    }
+  }, [auth.token, checked, router]);
+
+  return { ...auth, checked };
 }

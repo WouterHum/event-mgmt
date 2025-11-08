@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import {
   TextField,
@@ -10,17 +9,21 @@ import {
 } from "@mui/material";
 import { LockOutlined } from "@mui/icons-material";
 import { useSetAtom } from "jotai";
-import { authAtom } from "@/lib/auth";
+import { authAtom } from "@/atoms/authAtom"; 
 import { saveAuth } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
+export default function HomePage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const setAuth = useSetAtom(authAtom);
+  const router = useRouter();
 
   const handleLogin = async () => {
     try {
+      console.log("[Login] Sending request to API...");
+
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
         {
@@ -30,18 +33,26 @@ export default function LoginPage() {
         }
       );
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Invalid credentials");
-      }
+      console.log("[Login] Response status:", res.status);
+
+      if (!res.ok) throw new Error("Invalid credentials");
 
       const data = await res.json();
-      saveAuth(data.access_token, data.role, email);
-      setAuth({ token: data.access_token, role: data.role, email });
+      console.log("[Login] Response data:", data);
 
-      // ✅ redirect to dashboard
-      window.location.href = "/dashboard";
+      saveAuth(data.access_token, data.role, email);
+      console.log("[Login] Saved to localStorage:", {
+        token: data.access_token,
+        role: data.role,
+        email,
+      });
+
+      setAuth({ token: data.access_token, role: data.role, email });
+      console.log("[Login] Auth atom set, navigating to dashboard...");
+
+      router.push("/dashboard");
     } catch (err: unknown) {
+      console.error("[Login] Error:", err);
       if (err instanceof Error) {
         setMessage(err.message);
       } else {
@@ -51,15 +62,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-      <Card className="w-full max-w-md shadow-xl rounded-2xl">
-        <CardContent className="flex flex-col gap-6 p-8">
-          <div className="flex justify-center">
-            <LockOutlined fontSize="large" className="text-blue-500" />
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <Card className="w-full max-w-md">
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <LockOutlined />
+            <Typography variant="h5">Login</Typography>
           </div>
-          <Typography variant="h5" align="center" className="font-bold">
-            Login
-          </Typography>
 
           <TextField
             label="Email"
@@ -68,7 +77,6 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-
           <TextField
             label="Password"
             type="password"
@@ -77,20 +85,15 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
 
-          <Button
-            variant="contained"
-            color="primary"
-            fullWidth
-            onClick={handleLogin}
-          >
-            Login
-          </Button>
-
           {message && (
-            <Typography align="center" color="error">
+            <Typography color="error" variant="body2">
               {message}
             </Typography>
           )}
+
+          <Button variant="contained" color="primary" onClick={handleLogin}>
+            Sign In
+          </Button>
         </CardContent>
       </Card>
     </div>
