@@ -1,14 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import {
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  LinearProgress,
-  MenuItem,
-  TextField,
-} from "@mui/material";
+import { LinearProgress, MenuItem, TextField } from "@mui/material";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { apiGet, apiPost } from "@/lib/api";
 import { AxiosProgressEvent } from "axios";
@@ -24,7 +16,6 @@ interface SpeakerItem {
 }
 
 export default function UploadsPage() {
-  const auth = useAuthGuard();
   const [events, setEvents] = useState<EventItem[]>([]);
   const [speakers, setSpeakers] = useState<SpeakerItem[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string>("");

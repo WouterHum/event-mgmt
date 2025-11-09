@@ -9,7 +9,6 @@ import {
   DialogActions,
   TextField,
 } from "@mui/material";
-import { validateFields } from "@/lib/validation";
 
 interface Attendee {
   id?: number;
