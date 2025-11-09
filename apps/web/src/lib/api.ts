@@ -1,6 +1,6 @@
 "use client";
 
-import { authAtom } from "@/atoms/authAtom"; 
+import { authAtom } from "@/atoms/authAtom";
 import { getDefaultStore } from "jotai";
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 
@@ -19,6 +19,24 @@ const client = axios.create({
 });
 
 // --- Auth Helpers ---
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem("authToken");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// Response interceptor
+client.interceptors.response.use(
+  (response) => response, // pass successful responses
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid, redirect to login
+      localStorage.removeItem("authToken"); // optional: clear token
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null; // SSR safe
@@ -61,24 +79,32 @@ export function setAuth(token: string | null) {
 
 // --- Axios response handler ---
 
-async function handleAxiosResponse<T>(promise: Promise<AxiosResponse<T>>): Promise<T> {
+async function handleAxiosResponse<T>(
+  promise: Promise<AxiosResponse<T>>
+): Promise<T> {
   try {
     const res = await promise;
     return res.data;
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response) {
-      const msg = typeof err.response.data === "string"
-        ? err.response.data
-        : JSON.stringify(err.response.data);
+      const msg =
+        typeof err.response.data === "string"
+          ? err.response.data
+          : JSON.stringify(err.response.data);
       throw new Error(msg);
     }
     throw err instanceof Error ? err : new Error("Unknown API error");
   }
 }
 
+export default client;
+
 // --- API Helpers ---
 
-export async function apiGet<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
+export async function apiGet<T>(
+  path: string,
+  config?: AxiosRequestConfig
+): Promise<T> {
   const token = getAuthToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   return handleAxiosResponse<T>(client.get(path, { ...config, headers }));
@@ -95,7 +121,7 @@ export async function apiPost<TRequest, TResponse = unknown>(
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...config?.headers,
   };
-  
+
   // Debug logging
   if (data instanceof FormData) {
     console.log("Sending FormData:");
@@ -104,7 +130,7 @@ export async function apiPost<TRequest, TResponse = unknown>(
     }
     console.log("Headers:", headers);
   }
-  
+
   return handleAxiosResponse<TResponse>(
     client.post(path, data, { ...config, headers })
   );
@@ -116,7 +142,9 @@ export async function apiPut<TRequest, TResponse = unknown>(
 ): Promise<TResponse> {
   const token = getAuthToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  return handleAxiosResponse<TResponse>(client.put(path, data, { ...config, headers }));
+  return handleAxiosResponse<TResponse>(
+    client.put(path, data, { ...config, headers })
+  );
 }
 
 export async function apiDelete<TResponse = unknown>(
@@ -125,5 +153,7 @@ export async function apiDelete<TResponse = unknown>(
 ): Promise<TResponse> {
   const token = getAuthToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  return handleAxiosResponse<TResponse>(client.delete(path, { ...config, headers }));
+  return handleAxiosResponse<TResponse>(
+    client.delete(path, { ...config, headers })
+  );
 }

@@ -51,6 +51,14 @@ export default function UploadsPage() {
   };
 
   const handleUpload = async () => {
+    if (!selectedEvent || !selectedSpeaker) {
+      alert("Please select an event and a speaker.");
+      return;
+    }
+    if (!files || files.length === 0) {
+      alert("Please select at least one file.");
+      return;
+    }
     if (!files || files.length === 0) return alert("Choose files");
 
     const fd = new FormData();

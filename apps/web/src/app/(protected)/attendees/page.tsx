@@ -1,22 +1,32 @@
 "use client";
+
 import { useEffect, useState } from "react";
-import { Attendee } from "@/types";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+} from "@mui/material";
+import { validateFields } from "@/lib/validation";
+
+interface Attendee {
+  id?: number;
+  name: string;
+  email: string;
+}
 
 export default function AttendeesPage() {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Attendee | null>(null);
-  const [form, setForm] = useState<Attendee>({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-  });
+  const [form, setForm] = useState<Attendee>({ name: "", email: "" });
+  const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
 
   const load = async () => {
-    const d = await apiGet<Attendee[]>("/api/attendees/");
-    setAttendees(d);
+    const data = await apiGet<Attendee[]>("/api/attendees/");
+    setAttendees(data);
   };
 
   useEffect(() => {
@@ -24,12 +34,36 @@ export default function AttendeesPage() {
   }, []);
 
   const save = async () => {
-    if (editing && editing.id)
-      await apiPut(`/api/attendees/${editing.id}`, form);
-    else await apiPost("/api/attendees/", form);
-    load();
-    setOpen(false);
-    setEditing(null);
+    try {
+      // validate inline
+      const fieldErrors = validateAttendee(form);
+      setErrors(fieldErrors);
+
+      // stop if there are errors
+      if (Object.keys(fieldErrors).length > 0) return;
+
+      const payload = {
+        name: form.name,
+        email: form.email,
+      };
+
+      let created;
+      if (editing && editing.id) {
+        created = await apiPut(`/api/attendees/${editing.id}`, payload);
+      } else {
+        created = await apiPost("/api/attendees/", payload);
+      }
+
+      console.log("API response (save):", created);
+
+      await load();
+      setOpen(false);
+      setEditing(null);
+      setForm({ name: "", email: "" });
+    } catch (err) {
+      console.error("Failed to save attendee:", err);
+      alert("Save failed — check console for details.");
+    }
   };
 
   const remove = async (id?: number) => {
@@ -38,146 +72,150 @@ export default function AttendeesPage() {
     load();
   };
 
+  function validateAttendee(attendee: { name: string; email: string }) {
+    const errors: { name?: string; email?: string } = {};
+
+    if (!attendee.name || attendee.name.trim() === "") {
+      errors.name = "Name is required";
+    }
+
+    if (!attendee.email || attendee.email.trim() === "") {
+      errors.email = "Email is required";
+    } else if (!/^\S+@\S+\.\S+$/.test(attendee.email)) {
+      errors.email = "Email is invalid";
+    }
+
+    return errors;
+  }
+
   return (
-    <div className="min-h-screen bg-background text-foreground py-12">
-      <div className="max-w-4xl mx-auto px-4">
-        <header className="mb-10 text-center">
-          <h1 className="text-4xl font-bold mb-2">Attendees</h1>
-          <p className="text-muted-foreground">
-            Create and manage conference attendees
-          </p>
-        </header>
+    <div className="page-container">
+      <div className="page-header">
+        <h1 className="page-title">Attendees</h1>
+        <p className="page-subtitle">Add, update, or delete event attendees</p>
+      </div>
 
-        <div className="flex justify-center mb-8">
-          <button
-            onClick={() => {
-              setEditing(null);
-              setForm({ first_name: "", last_name: "", email: "", phone: "" });
-              setOpen(true);
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium shadow-sm hover:bg-primary/90 transition-all"
-          >
-            + Add Attendee
-          </button>
-        </div>
+      <div className="my-4 flex flex-wrap gap-3">
+        <button
+          onClick={() => {
+            setEditing(null);
+            setForm({ name: "", email: "" });
+            setOpen(true);
+          }}
+          className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium shadow-sm hover:bg-primary/90 transition-all"
+        >
+          + Add Attendee
+        </button>
+      </div>
 
-        <div className="bg-card border border-gray-200 rounded-2xl shadow-sm divide-y divide-gray-200">
-          {attendees.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No attendees found.
-            </p>
-          ) : (
-            attendees.map((a) => (
-              <div
+      <div className="modern-card mt-4 border border-gray-200 rounded-xl">
+        {attendees.length === 0 ? (
+          <p className="text-gray-500 text-center py-6">No attendees found</p>
+        ) : (
+          <ul>
+            {attendees.map((a, idx) => (
+              <li
                 key={a.id}
-                className="flex items-center justify-between px-6 py-4 hover:bg-muted transition-all"
+                className={`flex justify-between items-center py-3 px-4 ${
+                  idx !== attendees.length - 1 ? "border-b border-gray-200" : ""
+                }`}
               >
                 <div>
-                  <h3 className="text-base font-semibold">{`${a.first_name} ${a.last_name}`}</h3>
-                  <p className="text-sm text-muted-foreground">{a.email}</p>
-                  {a.phone && (
-                    <p className="text-sm text-muted-foreground">{a.phone}</p>
-                  )}
+                  <p className="font-semibold text-gray-800">{a.name}</p>
+                  <p className="text-sm text-gray-500">{a.email}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
                       setEditing(a);
-                      setForm(a);
+                      setForm({ name: a.name, email: a.email });
                       setOpen(true);
                     }}
-                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-foreground bg-card hover:bg-muted transition-all"
+                    className="px-3 py-1.5 rounded-lg font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 transition"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => remove(a.id)}
-                    className="rounded-md border border-red-300 text-red-600 px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 transition-all"
+                    className="px-3 py-1.5 rounded-lg font-semibold bg-red-100 text-red-700 hover:bg-red-200 border border-red-200 transition"
                   >
                     Delete
                   </button>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* Dialog with blurred overlay */}
-      {open && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg mx-4">
-            <div className="border-b border-gray-200 px-6 py-4">
-              <h2 className="text-lg font-semibold">
-                {editing ? "Edit Attendee" : "Add Attendee"}
-              </h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  First Name
-                </label>
-                <input
-                  type="text"
-                  value={form.first_name || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, first_name: e.target.value })
-                  }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  value={form.last_name || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, last_name: e.target.value })
-                  }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Email</label>
-                <input
-                  type="email"
-                  value={form.email || ""}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Phone</label>
-                <input
-                  type="text"
-                  value={form.phone || ""}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-            </div>
-            <div className="border-t border-gray-200 px-6 py-4 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  setEditing(null);
-                }}
-                className="px-4 py-2 rounded-md border border-gray-300 text-sm text-foreground bg-card hover:bg-muted transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={save}
-                className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-all"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Dialog */}
+      <Dialog
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          setEditing(null);
+          setForm({ name: "", email: "" });
+        }}
+        fullWidth
+        slotProps={{
+          backdrop: {
+            className: "backdrop-blur-sm bg-black/30",
+          },
+        }}
+        PaperProps={{
+          className:
+            "bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 !m-4",
+        }}
+      >
+        <DialogTitle className="font-semibold text-xl border-b border-gray-200 py-3">
+          {editing ? "Edit Attendee" : "Add Attendee"}
+        </DialogTitle>
+
+        <DialogContent className="space-y-4 py-5">
+          <TextField
+            fullWidth
+            label="Name"
+            value={form.name}
+            onChange={(e) => {
+              const name = e.target.value;
+              setForm({ ...form, name });
+              setErrors(validateAttendee({ ...form, name })); // real-time
+            }}
+            error={!!errors.name}
+            helperText={errors.name}
+          />
+          <TextField
+            fullWidth
+            label="Email"
+            value={form.email}
+            onChange={(e) => {
+              const email = e.target.value;
+              setForm({ ...form, email });
+              setErrors(validateAttendee({ ...form, email })); // real-time
+            }}
+            error={!!errors.email}
+            helperText={errors.email}
+          />
+        </DialogContent>
+
+        <DialogActions className="flex justify-end gap-3 p-4 border-t border-gray-200">
+          <button
+            onClick={() => {
+              setOpen(false);
+              setEditing(null);
+            }}
+            className="px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-100 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            className="px-4 py-2 rounded-md text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all shadow-sm"
+          >
+            Save
+          </button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }

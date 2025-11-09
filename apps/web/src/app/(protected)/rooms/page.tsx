@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Room } from "@/types";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
+import { validateFields } from "@/lib/validation";
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -15,6 +16,7 @@ export default function RoomsPage() {
     layout: "",
     equipment: "",
   });
+  const [errors, setErrors] = useState<Partial<Record<keyof Room, string>>>({});
 
   const load = async () => {
     const data = await apiGet<Room[]>("/api/rooms/");
@@ -26,18 +28,37 @@ export default function RoomsPage() {
   }, []);
 
   const save = async () => {
+    // validate required fields
+    const fieldErrors = validateFields(form, ["name", "capacity"]);
+    setErrors(fieldErrors);
+
+    if (Object.keys(fieldErrors).length > 0) return; // stop save if errors
+
     if (editing && editing.id) await apiPut(`/api/rooms/${editing.id}`, form);
     else await apiPost("/api/rooms/", form);
+
     await load();
     setOpen(false);
     setEditing(null);
     setForm({ name: "", capacity: 0, location: "", layout: "", equipment: "" });
+    setErrors({});
   };
 
   const remove = async (id?: number) => {
     if (!id) return;
     await apiDelete(`/api/rooms/${id}`);
     load();
+  };
+
+  const handleChange = (field: keyof Room, value: string | number) => {
+    const newForm = { ...form, [field]: value };
+    setForm(newForm);
+
+    // real-time validation for required fields
+    if (field === "name" || field === "capacity") {
+      const fieldErrors = validateFields(newForm, ["name", "capacity"]);
+      setErrors(fieldErrors);
+    }
   };
 
   return (
@@ -50,7 +71,6 @@ export default function RoomsPage() {
           </p>
         </header>
 
-        {/* Action button */}
         <div className="flex justify-center mb-8">
           <button
             onClick={() => {
@@ -63,6 +83,7 @@ export default function RoomsPage() {
                 equipment: "",
               });
               setOpen(true);
+              setErrors({});
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium shadow-sm hover:bg-primary/90 transition-all"
           >
@@ -70,7 +91,6 @@ export default function RoomsPage() {
           </button>
         </div>
 
-        {/* Rooms List */}
         <div className="bg-card border border-gray-200 rounded-2xl shadow-sm divide-y divide-gray-200">
           {rooms.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
@@ -109,6 +129,7 @@ export default function RoomsPage() {
                       setEditing(r);
                       setForm(r);
                       setOpen(true);
+                      setErrors({});
                     }}
                     className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-foreground bg-card hover:bg-muted transition-all"
                   >
@@ -127,7 +148,6 @@ export default function RoomsPage() {
         </div>
       </div>
 
-      {/* Modal */}
       {open && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg mx-4">
@@ -143,9 +163,12 @@ export default function RoomsPage() {
                 <input
                   type="text"
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => handleChange("name", e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
+                {errors.name && (
+                  <p className="text-red-600 text-sm mt-1">{errors.name}</p>
+                )}
               </div>
 
               <div>
@@ -156,13 +179,13 @@ export default function RoomsPage() {
                   type="number"
                   value={form.capacity || 0}
                   onChange={(e) =>
-                    setForm({
-                      ...form,
-                      capacity: Number(e.target.value),
-                    })
+                    handleChange("capacity", Number(e.target.value))
                   }
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
+                {errors.capacity && (
+                  <p className="text-red-600 text-sm mt-1">{errors.capacity}</p>
+                )}
               </div>
 
               <div>
@@ -172,9 +195,7 @@ export default function RoomsPage() {
                 <input
                   type="text"
                   value={form.location || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, location: e.target.value })
-                  }
+                  onChange={(e) => handleChange("location", e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
@@ -184,7 +205,7 @@ export default function RoomsPage() {
                 <input
                   type="text"
                   value={form.layout || ""}
-                  onChange={(e) => setForm({ ...form, layout: e.target.value })}
+                  onChange={(e) => handleChange("layout", e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
@@ -196,9 +217,7 @@ export default function RoomsPage() {
                 <input
                   type="text"
                   value={form.equipment || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, equipment: e.target.value })
-                  }
+                  onChange={(e) => handleChange("equipment", e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
