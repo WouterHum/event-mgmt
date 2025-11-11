@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Button } from "@mui/material";
-import { Calendar, Users, Upload, Shield } from "lucide-react";
+import { Calendar, Upload, Shield } from "lucide-react";
 
 const HomePage = () => {
   return (
@@ -40,7 +40,7 @@ const HomePage = () => {
                     "linear-gradient(90deg, rgba(79,70,229,1) 0%, rgba(219,39,119,1) 100%)",
                 },
               }}
-              onClick={() => "/auth"}
+              onClick={() => window.location.href = "/auth"}
             >
               Get Started
             </Button>
