@@ -8,6 +8,7 @@ import boto3
 import pymysql
 from contextlib import contextmanager
 from typing import Generator
+from functools import lru_cache
 
 settings = get_settings()
 
@@ -18,23 +19,24 @@ app = FastAPI(
 )
 
 
-# Custom middleware to add CORS headers to all responses
-# @app.middleware("http")
-# async def add_cors_headers(request: Request, call_next):
-#     response = await call_next(request)
-#     response.headers["Access-Control-Allow-Origin"] = "*"
-#     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-#     response.headers["Access-Control-Allow-Headers"] = "*"
-#     response.headers["Access-Control-Expose-Headers"] = "*"
-#     return response
+
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+if ENVIRONMENT == "production":
+    allowed_origins = [
+        "https://main.dov6w328993cl.amplifyapp.com",
+        # Add other production domains if needed
+    ]
+else:
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000"
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,21 +48,28 @@ _db_password = None
 _db_connection = None
 
 
-def get_db_password() -> str:
-    """Lazy load DB password from SSM Parameter Store"""
-    global _db_password
-    if _db_password is None:
+@lru_cache()
+def get_db_password():
+    """Get database password from SSM Parameter Store (cached)"""
+    from .config import get_settings
+    settings = get_settings()
+    
+    # In production, get from SSM
+    if settings.is_production:
         try:
             ssm = boto3.client("ssm", region_name=os.environ.get("AWS_REGION", "af-south-1"))
             response = ssm.get_parameter(
                 Name="/event-mgmt-api/db/password",
                 WithDecryption=True
             )
-            _db_password = response['Parameter']['Value']
+            return response['Parameter']['Value']
         except Exception as e:
-            print(f"Error fetching DB password from SSM: {e}")
-            raise
-    return _db_password
+            print(f"Error fetching password from SSM: {e}")
+            # Fallback to environment variable
+            return os.environ.get("DB_PASSWORD", "")
+    else:
+        # Local development
+        return settings.MYSQL_PASSWORD
 
 
 def init_db_connection():
@@ -69,12 +78,15 @@ def init_db_connection():
     
     if _db_connection is None or not _db_connection.open:
         try:
+            # Get password
+            password = get_db_password()
+            
             _db_connection = pymysql.connect(
-                host=os.environ.get("DB_HOST"),
-                user=os.environ.get("DB_USER"),
-                password=get_db_password(),
-                database=os.environ.get("DB_NAME"),
-                port=3306,
+                host=os.environ.get("DB_HOST", os.environ.get("MYSQL_HOST", "localhost")),
+                user=os.environ.get("DB_USER", os.environ.get("MYSQL_USER", "appuser")),
+                password=password,
+                database=os.environ.get("DB_NAME", os.environ.get("MYSQL_DB", "eventdb")),
+                port=int(os.environ.get("DB_PORT", "3306")),
                 connect_timeout=5,
                 read_timeout=10,
                 write_timeout=10,
@@ -88,18 +100,11 @@ def init_db_connection():
     
     return _db_connection
 
-
 @contextmanager
 def get_db_connection() -> Generator[pymysql.connections.Connection, None, None]:
     """
     Context manager for database connections.
     Reuses existing connection and handles ping/reconnection.
-    
-    Usage:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users")
-            results = cursor.fetchall()
     """
     conn = init_db_connection()
     
@@ -122,22 +127,13 @@ def get_db_connection() -> Generator[pymysql.connections.Connection, None, None]
 
 @contextmanager
 def get_db_cursor(cursor_type=pymysql.cursors.DictCursor):
-    """
-    Context manager for database cursor.
-    Returns dictionary cursor by default for easier data handling.
-    
-    Usage:
-        with get_db_cursor() as cursor:
-            cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-            user = cursor.fetchone()
-    """
+    """Context manager for database cursor."""
     with get_db_connection() as conn:
         cursor = conn.cursor(cursor_type)
         try:
             yield cursor
         finally:
             cursor.close()
-
 
 # --- Include Routers ---
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
@@ -189,4 +185,4 @@ def health_db():
 
 # --- Lambda Handler ---
 from mangum import Mangum
-handler = Mangum(app, api_gateway_base_path="/Prod")
+handler = Mangum(app)
