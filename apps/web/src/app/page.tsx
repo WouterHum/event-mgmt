@@ -6,8 +6,7 @@ import { Calendar, Users, Upload, Shield } from "lucide-react";
 
 const HomePage = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-100">      
-
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-100">
       <main className="container mx-auto px-6 py-20">
         <div className="mx-auto max-w-4xl text-center">
           {/* Heading */}
@@ -41,7 +40,7 @@ const HomePage = () => {
                     "linear-gradient(90deg, rgba(79,70,229,1) 0%, rgba(219,39,119,1) 100%)",
                 },
               }}
-              onClick={() => ("/auth")}
+              onClick={() => "/auth"}
             >
               Get Started
             </Button>
