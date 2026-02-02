@@ -40,7 +40,7 @@ const HomePage = () => {
                     "linear-gradient(90deg, rgba(79,70,229,1) 0%, rgba(219,39,119,1) 100%)",
                 },
               }}
-              onClick={() => window.location.href = "/auth"}
+              onClick={() => (window.location.href = "/login")}
             >
               Get Started
             </Button>

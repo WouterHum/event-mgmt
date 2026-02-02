@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Attendee
+from ..models import Upload  # <-- you need this
+from typing import List, Optional
+from sqlalchemy import or_
 from ..deps import require_roles
 from pydantic import BaseModel
 
@@ -10,6 +13,73 @@ router = APIRouter()
 class AttendeeCreate(BaseModel):
     name: str
     email: str
+    
+    
+# 🔍 Search attendees by name
+@router.get("/search")
+def search_attendees(q: str, db: Session = Depends(get_db)):
+    if not q:
+        return []
+
+    rows = (
+        db.query(Attendee)
+        .filter(Attendee.name.ilike(f"%{q}%"))
+        .order_by(Attendee.name.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "email": r.email
+        }
+        for r in rows
+    ]
+
+# 📌 Get attendee with session + upload status
+@router.get("/{attendee_id}")
+def get_attendee(attendee_id: int, db: Session = Depends(get_db)):
+    attendee = db.query(Attendee).filter(Attendee.id == attendee_id).first()
+    if not attendee:
+        raise HTTPException(status_code=404, detail="Attendee not found")
+
+    # fetch uploads for this attendee
+    uploads = (
+        db.query(Upload)
+        .filter(Upload.attendee_id == attendee_id)
+        .order_by(Upload.updated_at.desc())
+        .all()
+    )
+
+    uploads_list = [
+        {
+            "id": u.id,
+            "filename": u.filename,
+            "has_video": bool(u.has_video),
+            "has_audio": bool(u.has_audio),
+            "needs_internet": bool(u.needs_internet),
+            "updated_at": u.updated_at,
+            "event_id": u.event_id,
+            "speaker_id": u.speaker_id
+        }
+        for u in uploads
+    ]
+
+    return {
+        "delegate": {
+            "id": attendee.id,
+            "name": attendee.name,
+            "email": attendee.email,
+        },
+        "session": {
+            "title": attendee.session_title,
+            "venue": attendee.venue,
+            "time": attendee.presentation_time,
+        },
+        "uploads": uploads_list,
+    }
+
 
 # ✅ List all attendees
 @router.get("/")

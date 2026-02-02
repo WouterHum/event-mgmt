@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { validateFields } from "@/lib/validation";
 import { Event } from "@/types";
@@ -14,6 +15,7 @@ interface EventFormFields {
 }
 
 export default function EventsPageContent() {
+  const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Event | null>(null);
@@ -24,7 +26,9 @@ export default function EventsPageContent() {
     end_time: "",
     location: "",
   });
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof EventFormFields, string>>>({});
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<keyof EventFormFields, string>>
+  >({});
 
   const load = async () => {
     try {
@@ -44,7 +48,10 @@ export default function EventsPageContent() {
     const errors = validateFields(form, ["title", "start_time", "end_time"]);
     const typedErrors: Partial<Record<keyof EventFormFields, string>> = {};
     Object.keys(errors).forEach((key) => {
-      if (key in form) typedErrors[key as keyof EventFormFields] = errors[key as keyof typeof errors] as string;
+      if (key in form)
+        typedErrors[key as keyof EventFormFields] = errors[
+          key as keyof typeof errors
+        ] as string;
     });
     setFieldErrors(typedErrors);
 
@@ -95,12 +102,22 @@ export default function EventsPageContent() {
     }
   };
 
+  const navigateToSpeakers = (eventId: number) => {
+    window.location.href = `/speakers-management?eventId=${eventId}`;
+  };
+
+  const navigateToManage = (eventId: number) => {
+    window.location.href = `/event-dashboard?eventId=${eventId}`;
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground py-12">
       <div className="max-w-4xl mx-auto px-4">
         <header className="mb-10 text-center">
           <h1 className="text-4xl font-bold mb-2">Events</h1>
-          <p className="text-muted-foreground">Create and manage conference events</p>
+          <p className="text-muted-foreground">
+            Create and manage conference events
+          </p>
         </header>
 
         {/* Action Buttons */}
@@ -108,7 +125,13 @@ export default function EventsPageContent() {
           <button
             onClick={() => {
               setEditing(null);
-              setForm({ title: "", description: "", start_time: "", end_time: "", location: "" });
+              setForm({
+                title: "",
+                description: "",
+                start_time: "",
+                end_time: "",
+                location: "",
+              });
               setFieldErrors({});
               setOpen(true);
             }}
@@ -121,28 +144,53 @@ export default function EventsPageContent() {
         {/* Events List */}
         <div className="bg-card border border-gray-200 rounded-2xl shadow-sm divide-y divide-gray-200">
           {events.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No events found.</p>
+            <p className="text-center text-muted-foreground py-8">
+              No events found.
+            </p>
           ) : (
             events.map((e) => (
-              <div key={e.id} className="flex items-center justify-between px-6 py-4 hover:bg-muted transition-all">
-                <div>
-                  <h3 className="text-base font-semibold">{e.title}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {e.start_time ? `${e.start_time} @ ${e.location || "TBA"}` : e.location || "No location"}
-                  </p>
+              <div
+                key={e.id}
+                className="px-6 py-4 hover:bg-muted transition-all"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-base font-semibold">{e.title}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {e.start_time
+                        ? `${e.start_time} @ ${e.location || "TBA"}`
+                        : e.location || "No location"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(e)}
+                      className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-foreground bg-card hover:bg-muted transition-all"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => remove(e.id)}
+                      className="rounded-md border border-red-300 text-red-600 px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 transition-all"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
+
+                {/* Speaker & Session Management Buttons */}
+                <div className="flex gap-2 mt-3">
                   <button
-                    onClick={() => handleEdit(e)}
-                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-foreground bg-card hover:bg-muted transition-all"
+                    onClick={() => navigateToSpeakers(e.id!)}
+                    className="inline-flex items-center justify-center rounded-md bg-blue-500 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-blue-600 transition-all"
                   >
-                    Edit
+                    📊 Manage Speakers & Sessions
                   </button>
                   <button
-                    onClick={() => remove(e.id)}
-                    className="rounded-md border border-red-300 text-red-600 px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 transition-all"
+                    onClick={() => navigateToManage(e.id!)}
+                    className="inline-flex items-center justify-center rounded-md bg-purple-500 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-purple-600 transition-all"
                   >
-                    Delete
+                    ⚙️ Event Dashboard
                   </button>
                 </div>
               </div>
@@ -156,7 +204,9 @@ export default function EventsPageContent() {
         <div className="fixed inset-0 bg-white/10 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg mx-4">
             <div className="border-b border-gray-200 px-6 py-4">
-              <h2 className="text-lg font-semibold">{editing ? "Edit Event" : "Add Event"}</h2>
+              <h2 className="text-lg font-semibold">
+                {editing ? "Edit Event" : "Add Event"}
+              </h2>
             </div>
             <div className="p-6 space-y-4">
               {/** Title Field */}
@@ -167,18 +217,28 @@ export default function EventsPageContent() {
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                    fieldErrors.title ? "border-red-500 focus:ring-red-300" : "border-gray-300 focus:ring-primary/40"
+                    fieldErrors.title
+                      ? "border-red-500 focus:ring-red-300"
+                      : "border-gray-300 focus:ring-primary/40"
                   }`}
                 />
-                {fieldErrors.title && <p className="text-red-500 text-xs mt-1">{fieldErrors.title}</p>}
+                {fieldErrors.title && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {fieldErrors.title}
+                  </p>
+                )}
               </div>
 
               {/** Description Field */}
               <div>
-                <label className="block text-sm font-medium mb-1">Description</label>
+                <label className="block text-sm font-medium mb-1">
+                  Description
+                </label>
                 <textarea
                   value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
@@ -186,38 +246,60 @@ export default function EventsPageContent() {
               {/** Start/End Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Start</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Start
+                  </label>
                   <input
                     type="datetime-local"
                     value={form.start_time}
-                    onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, start_time: e.target.value })
+                    }
                     className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                      fieldErrors.start_time ? "border-red-500 focus:ring-red-300" : "border-gray-300 focus:ring-primary/40"
+                      fieldErrors.start_time
+                        ? "border-red-500 focus:ring-red-300"
+                        : "border-gray-300 focus:ring-primary/40"
                     }`}
                   />
-                  {fieldErrors.start_time && <p className="text-red-500 text-xs mt-1">{fieldErrors.start_time}</p>}
+                  {fieldErrors.start_time && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {fieldErrors.start_time}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">End</label>
                   <input
                     type="datetime-local"
                     value={form.end_time}
-                    onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, end_time: e.target.value })
+                    }
                     className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                      fieldErrors.end_time ? "border-red-500 focus:ring-red-300" : "border-gray-300 focus:ring-primary/40"
+                      fieldErrors.end_time
+                        ? "border-red-500 focus:ring-red-300"
+                        : "border-gray-300 focus:ring-primary/40"
                     }`}
                   />
-                  {fieldErrors.end_time && <p className="text-red-500 text-xs mt-1">{fieldErrors.end_time}</p>}
+                  {fieldErrors.end_time && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {fieldErrors.end_time}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/** Location Field */}
               <div>
-                <label className="block text-sm font-medium mb-1">Location</label>
+                <label className="block text-sm font-medium mb-1">
+                  Location
+                </label>
                 <input
                   type="text"
                   value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, location: e.target.value })
+                  }
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>

@@ -11,11 +11,12 @@ export interface Event {
   title: string;
   description?: string;
   start_time?: string; // ISO
-  end_time?: string;   // ISO
+  end_time?: string; // ISO
   location?: string;
   created_by?: number | null;
 }
 
+export type RoomStatus = "offline" | "busy" | "online" | "synced";
 export interface Room {
   id?: number;
   name: string;
@@ -23,6 +24,8 @@ export interface Room {
   location?: string;
   layout?: string;
   equipment?: string;
+  ip_address?: string | null;
+  status: RoomStatus;
 }
 
 export interface Attendee {
@@ -33,3 +36,11 @@ export interface Attendee {
   phone?: string;
   registration_status?: string;
 }
+
+export type User = {
+  id: number;
+  email: string;
+  role: "admin" | "technician" | "client" | "uploader";
+  is_active: boolean;
+  created_at: string;
+};

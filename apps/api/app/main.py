@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, events, files, devices, speakers, rooms, attendees
+from .routers import auth, events, files, devices, speakers, rooms, attendees, admin_users
 from .config import get_settings
 import os
 import boto3
@@ -143,6 +143,7 @@ app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(speakers.router, prefix="/api/speakers", tags=["speakers"])
 app.include_router(rooms.router, prefix="/api/rooms", tags=["rooms"])
 app.include_router(attendees.router, prefix="/api/attendees", tags=["attendees"])
+app.include_router(admin_users.router, prefix="/api/admin/users", tags=["admin-users"])
 
 # --- DEBUG: print all routes and methods ---
 for route in app.routes:

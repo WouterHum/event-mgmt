@@ -1,51 +1,53 @@
 version: "3.9"
-services:
-  mysql:
-    image: mysql:8.0
-    container_name: event-mgmt-mysql
-    environment:
-      MYSQL_DATABASE: event_mgmt
-      MYSQL_USER: eventuser
-      MYSQL_PASSWORD: StrongPassword123!
-      MYSQL_ROOT_PASSWORD: 03BadpropMysql!
-    ports: ["3307:3306"]
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpass"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
+services:
   api:
     build: ./apps/api
+    container_name: event-mgmt-api
+    restart: unless-stopped	
     env_file: ./apps/api/.env
     volumes:
       - ./apps/api:/app
       - uploads:/data/uploads
-    ports: ["8000:8000"]
+    ports:
+      - "8000:8000"
     depends_on:
       mysql:
         condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  mysql:
+    image: mysql:8
+    container_name: event-mgmt-mysql
+    restart: unless-stopped
     environment:
-      - DATABASE_URL=mysql://eventuser:StrongPassword123!@mysql:3306/event_mgmt
-    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      MYSQL_ROOT_PASSWORD: rootpass       
+      MYSQL_DATABASE: event_mgmt
+      MYSQL_USER: event_user             
+      MYSQL_PASSWORD: eventpass          
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 5
 
   web:
-    build: ./apps/web
+    build:
+      context: ./apps/web   # <-- this must point to the folder containing package.json
+      dockerfile: Dockerfile
     container_name: event-mgmt-web
-    restart: always
+    restart: unless-stopped
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - CI=true
     volumes:
       - ./apps/web:/app
       - /app/node_modules
-    ports: ["3000:3000"]
-    depends_on: [api]
-    #command: sh -c "pnpm install && pnpm dev --port 3000 --hostname 0.0.0.0"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
 
 volumes:
-  mysql_data:
   uploads:

@@ -22,7 +22,7 @@ export default function NavBar() {
     <AppBar position="static" sx={{ mb: 2 }}>
       <Toolbar>
         <Typography sx={{ flex: 1 }}>
-          <Link href="/dashboard">Event Managememt</Link>
+          <Link href="/dashboard">Event Management</Link>
         </Typography>
         <Button color="inherit" component={Link} href="/events">
           Events

@@ -45,3 +45,12 @@ npm run dev:db
 npm run dev - this must be run from apps/web folder
 npm run dev:api
 npm run dev:all
+
+
+
+need to run from cd apps/api
+uvicorn app.main:app --reload --port 8000
+
+need to run cd apps/web
+
+npm run dev
