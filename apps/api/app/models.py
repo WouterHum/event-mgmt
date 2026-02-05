@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Date, Time
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Date, Time, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column, declarative_base
 from .db import Base
 from datetime import datetime
@@ -58,7 +58,10 @@ class Room(Base):
     capacity = Column(Integer)
     layout = Column(String(255), nullable=True)  
     equipment = Column(Text, nullable=True) 
-    status: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(
+    Enum("red", "amber", "green", "blue", name="room_status"),
+    nullable=False,
+    default="red")
     ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     uploads = relationship("Upload", back_populates="room")
     
@@ -78,6 +81,7 @@ class Upload(Base):
     speaker_id = Column(Integer, ForeignKey("speakers.id"), nullable=False)
     attendee_id = Column(Integer, ForeignKey("attendees.id"), nullable=True)  
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True)  
+    session_date = Column(DateTime, nullable=True) 
     filename = Column(String(512), nullable=False)
     size_bytes = Column(Integer)
     has_video: Mapped[bool] = mapped_column(Boolean, default=False)

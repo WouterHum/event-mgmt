@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Room, Presentation } from "@/types";
-import { apiGet, apiPut, apiDelete } from "@/lib/api";
+import { apiGet, apiPut, apiPost, apiDelete } from "@/lib/api";
 import { validateFields } from "@/lib/validation";
 import RoomStatusIndicator from "@/app/components/RoomStatusIndicator";
 import UploadPresentations from "@/app/components/RoomUploader";
@@ -243,7 +243,7 @@ export default function RoomsPage() {
                   if (editingRoom.id) {
                     await apiPut(`/api/rooms/${editingRoom.id}`, editingRoom);
                   } else {
-                    await apiPut("/api/rooms", editingRoom);
+                    await apiPost("/api/rooms", editingRoom);
                   }
 
                   setIsModalOpen(false);

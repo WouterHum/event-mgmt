@@ -21,10 +21,13 @@ interface Event {
 
 interface Room {
   id?: number;
+  ip_address?: string;
   name: string;
-  capacity?: number;
+  capacity?: number | null;
   location?: string;
   status?: string;
+  equipment?: string;
+  layout?: string;
 }
 
 interface RoomStatus {
@@ -55,7 +58,6 @@ export default function EventDashboardPage() {
   const [roomDialogOpen, setRoomDialogOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [roomForm, setRoomForm] = useState<Room>({ name: "" });
-  
 
   // Upload
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
@@ -416,7 +418,6 @@ export default function EventDashboardPage() {
           </div>
         </div>
       )}
-
       {/* Room Dialog */}
       <Dialog
         open={roomDialogOpen}
@@ -443,25 +444,58 @@ export default function EventDashboardPage() {
         <DialogContent className="space-y-4 py-5">
           <TextField
             fullWidth
+            required
             label="Room Name"
             value={roomForm.name}
             onChange={(e) => setRoomForm({ ...roomForm, name: e.target.value })}
           />
+
           <TextField
             fullWidth
-            label="Location (optional)"
+            label="IP Address"
+            value={roomForm.ip_address || ""}
+            onChange={(e) =>
+              setRoomForm({ ...roomForm, ip_address: e.target.value })
+            }
+          />
+
+          <TextField
+            fullWidth
+            label="Capacity"
+            type="number"
+            value={roomForm.capacity ?? ""}
+            onChange={(e) =>
+              setRoomForm({
+                ...roomForm,
+                capacity: e.target.value ? Number(e.target.value) : null,
+              })
+            }
+          />
+
+          <TextField
+            fullWidth
+            label="Location"
             value={roomForm.location || ""}
             onChange={(e) =>
               setRoomForm({ ...roomForm, location: e.target.value })
             }
           />
+
           <TextField
             fullWidth
-            label="Capacity (optional)"
-            type="number"
-            value={roomForm.capacity || ""}
+            label="Layout"
+            value={roomForm.layout || ""}
             onChange={(e) =>
-              setRoomForm({ ...roomForm, capacity: Number(e.target.value) })
+              setRoomForm({ ...roomForm, layout: e.target.value })
+            }
+          />
+
+          <TextField
+            fullWidth
+            label="Equipment"
+            value={roomForm.equipment || ""}
+            onChange={(e) =>
+              setRoomForm({ ...roomForm, equipment: e.target.value })
             }
           />
         </DialogContent>
@@ -476,6 +510,7 @@ export default function EventDashboardPage() {
           >
             Cancel
           </button>
+
           <button
             onClick={saveRoom}
             className="px-4 py-2 rounded-md text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all shadow-sm"

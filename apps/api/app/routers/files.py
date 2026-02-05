@@ -4,8 +4,9 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import date, time
+from datetime import date, time, datetime
 import shutil
+import logging
 
 from app.db import get_db
 from app.models import Upload, Event
@@ -16,6 +17,8 @@ router = APIRouter(
       # <-- add this
     tags=["uploads"]
 )
+
+logger = logging.getLogger("uvicorn.error")
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -50,34 +53,65 @@ class UploadUpdateDTO(BaseModel):
 # --------------------------
 @router.post("/uploads")
 async def upload_files(
-    attendee_id: int = Form(...),  
     event_id: int = Form(...),
     speaker_id: int = Form(...),
+    room_id: int = Form(...),  # Added
+    session_date: str = Form(...),  # Added
+    session_time: str = Form(...),  # Added
+    attendee_id: Optional[int] = Form(None),
     has_video: bool = Form(False),
     has_audio: bool = Form(False),
     needs_internet: bool = Form(False),
-    files: List[UploadFile] = File(...),
+    files: List[UploadFile] = File(default=[]),  # Made optional - can be empty list
     db: Session = Depends(get_db),    
 ):
     storage = get_storage()
     uploaded = []
+    
+    logger.info("=== /uploads endpoint hit ===")
+    logger.info(f"attendee_id={attendee_id}, room_id={room_id}")
+    logger.info(f"session_date={session_date}, session_time={session_time}")
+    logger.info(f"files count={len(files)}")
 
     try:
-        for file in files:
-            if not file.filename:
-                continue
-            data = await file.read()
-            meta = storage.save(file.filename, data)
+        # Combine date and time
+        session_datetime = f"{session_date}T{session_time}:00"
+        
+        # If there are files, upload them
+        if files and len(files) > 0:
+            for file in files:
+                if not file.filename:
+                    continue
+                data = await file.read()
+                meta = storage.save(file.filename, data)
+                up = Upload(
+                    attendee_id=attendee_id,  
+                    event_id=event_id,
+                    speaker_id=speaker_id,
+                    room_id=room_id,  # Added
+                    session_datetime=session_datetime,  # Added
+                    filename=meta["key"],
+                    size_bytes=len(data),
+                    has_video=has_video,
+                    has_audio=has_audio,
+                    needs_internet=needs_internet,
+                    etag=meta.get("etag"),
+                )
+                db.add(up)
+                uploaded.append(up)
+        else:
+            # No files - just create a session record without files
             up = Upload(
                 attendee_id=attendee_id,  
                 event_id=event_id,
                 speaker_id=speaker_id,
-                filename=meta["key"],
-                size_bytes=len(data),
+                room_id=room_id,
+                session_datetime=session_datetime,
+                filename=None,  # No file
+                size_bytes=0,
                 has_video=has_video,
                 has_audio=has_audio,
                 needs_internet=needs_internet,
-                etag=meta.get("etag"),
             )
             db.add(up)
             uploaded.append(up)
@@ -86,11 +120,11 @@ async def upload_files(
         for up in uploaded:
             db.refresh(up)
 
-        return {"uploaded": [u.filename for u in uploaded]}
+        return {"uploaded": [u.filename for u in uploaded if u.filename]}
     except Exception as e:
         db.rollback()
+        logger.error(f"Error in upload_files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # --------------------------
 # Update tech notes endpoint
@@ -124,38 +158,58 @@ def manifest(event_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/")
-def create_session(session: dict, db: Session = Depends(get_db)):
+async def create_session(
+    event_id: int = Form(...),
+    speaker_id: int = Form(...),
+    room_id: int = Form(...),
+    session_date: str = Form(...),
+    session_time: str = Form(...),
+    has_video: bool = Form(False),
+    has_audio: bool = Form(False),
+    needs_internet: bool = Form(False),
+    attendee_id: int | None = Form(None),
+    db: Session = Depends(get_db)
+):
     """Create new session/upload - validates date within event period"""
+    
     # Validate event exists
-    event = db.query(Event).filter(Event.id == session["event_id"]).first()
+    event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
-    # Validate date is within event period (if dates are provided)
-    if session.get("session_date"):
-        session_date = session["session_date"]
+    # Validate date is within event period
+    if session_date:
+        from datetime import datetime
+        session_dt = datetime.strptime(session_date, "%Y-%m-%d").date()
         if hasattr(event, 'start_date') and hasattr(event, 'end_date'):
-            if not (event.start_date <= session_date <= event.end_date):
+            if not (event.start_date <= session_dt <= event.end_date):
                 raise HTTPException(
                     status_code=400,
                     detail=f"Session date must be between {event.start_date} and {event.end_date}"
                 )
     
-    # Map tech_notes to your Upload model fields
-    tech_notes = session.pop("tech_notes", {})
-    session["has_video"] = tech_notes.get("video", False)
-    session["has_audio"] = tech_notes.get("audio", False)
-    session["needs_internet"] = tech_notes.get("no_ppt", False)
+    # Create session object
+    session_data = {
+        "event_id": event_id,
+        "speaker_id": speaker_id,
+        "room_id": room_id,
+        "session_date": session_date,
+        "session_time": session_time,
+        "has_video": has_video,
+        "has_audio": has_audio,
+        "needs_internet": needs_internet,
+        "filename": f"presentation_{speaker_id}.pptx"
+    }
     
-    # Set default filename if not provided
-    if "filename" not in session:
-        session["filename"] = f"presentation_{session['speaker_id']}.pptx"
+    if attendee_id:
+        session_data["attendee_id"] = attendee_id
     
-    db_session = Upload(**session)
+    db_session = Upload(**session_data)
     db.add(db_session)
     db.commit()
     db.refresh(db_session)
-    return db_session
+    
+    return {"id": db_session.id, **session_data}
 
 @router.put("/{session_id}")
 def update_session(session_id: int, session: dict, db: Session = Depends(get_db)):
@@ -383,49 +437,61 @@ async def update_upload(
 
 @router.post("/uploads")
 async def create_upload(
-    attendee_id: int = Form(...),
+    attendee_id: Optional[int] = Form(None),
     event_id: int = Form(...),
     speaker_id: int = Form(...),
-    room_id: Optional[int] = Form(None),  # ADD THIS
-    session_date: Optional[str] = Form(None),  # ADD THIS
-    session_time: Optional[str] = Form(None),  # ADD THIS
-    files: list[UploadFile] = File(...),
-    db: Session = Depends(get_db)  # ADD THIS if not there
+    room_id: Optional[int] = Form(None),
+    session_date: Optional[str] = Form(None),
+    session_time: Optional[str] = Form(None),
+    files: Optional[List[UploadFile]] = File(None),
+    db: Session = Depends(get_db)
 ):
-    """Create upload/session with room and schedule info"""
-    
-    # Save files
+    logger.info("=== /uploads endpoint hit ===")
+    logger.info(f"attendee_id={attendee_id}")
+    logger.info(f"event_id={event_id}")
+    logger.info(f"speaker_id={speaker_id}")
+    logger.info(f"room_id={room_id}")
+    logger.info(f"session_date={session_date}")
+    logger.info(f"session_time={session_time}")
+    logger.info(f"files={files}")
+    logger.info(f"Number of files: {len(files) if files else 0}")
+
+    if attendee_id is None:
+        raise HTTPException(status_code=400, detail="attendee_id is required")
+
     uploaded_files = []
-    for file in files:
-        # Save file to disk
-        file_path = f"uploads/{event_id}_{file.filename}"
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Create database record
-        upload = Upload()
-        upload.attendee_id = attendee_id  # type: ignore[assignment]
-        upload.event_id = event_id  # type: ignore[assignment]
-        upload.speaker_id = speaker_id  # type: ignore[assignment]
-        upload.room_id = room_id  # type: ignore[assignment]
-        upload.session_date = session_date  # type: ignore[assignment]
-        upload.session_time = session_time  # type: ignore[assignment]
-        upload.filename = file.filename  # type: ignore[assignment]
-        upload.size_bytes = file.size  # type: ignore[assignment]
-        upload.uploaded = True  # type: ignore[assignment]
-        
-        db.add(upload)
-        uploaded_files.append(file.filename)
-    
+
+    if files:
+        for file in files:
+            file_path = f"uploads/{event_id}_{file.filename}"
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+            upload = Upload(
+                attendee_id=attendee_id,
+                event_id=event_id,
+                speaker_id=speaker_id,
+                room_id=room_id,
+                session_date=datetime.strptime(session_date, "%Y-%m-%d").date() if session_date else None,
+                session_time=datetime.strptime(session_time, "%H:%M").time() if session_time else None,
+                filename=file.filename,
+                size_bytes=file.size,
+                uploaded=True,
+            )
+
+            db.add(upload)
+            uploaded_files.append(file.filename)
+
     db.commit()
-    
+
     return {
         "status": "ok",
         "files_uploaded": len(uploaded_files),
         "room_id": room_id,
         "session_date": session_date,
-        "session_time": session_time
+        "session_time": session_time,
     }
+
 
 
 @router.delete("/uploads/{upload_id}")

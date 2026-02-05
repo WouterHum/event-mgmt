@@ -45,7 +45,7 @@ interface TechNotes {
 }
 
 interface Session {
-  id?: number;
+  id?: number; // Optional when creating
   event_id: number;
   speaker_id: number;
   room_id: number;
@@ -56,6 +56,10 @@ interface Session {
   upload_file_path?: string;
   room_name?: string;
   event_name?: string;
+}
+
+interface SessionResponse extends Omit<Session, "id"> {
+  id: number; // Required in response
 }
 
 export default function SpeakerSessionsPage() {
@@ -118,6 +122,7 @@ export default function SpeakerSessionsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+
       const [eventData, speakerData, sessionsData, roomsData] =
         await Promise.all([
           apiGet<Event>(`/api/events/${eventId}`),
@@ -125,13 +130,29 @@ export default function SpeakerSessionsPage() {
           apiGet<Session[]>(`/api/speakers/${speakerId}/sessions`),
           apiGet<Room[]>(`/api/events/${eventId}/rooms`),
         ]);
-      console.log("Rooms loaded:", roomsData); // ADD THIS
-      console.log("Rooms count:", roomsData.length); // ADD THI
+
+      // Map room names and ensure tech_notes are defined
+      const sessionsWithExtras = sessionsData.map((s) => ({
+        ...s,
+        room_name: roomsData.find((r) => r.id === s.room_id)?.name ?? "—",
+        event_name: eventData.title,
+        tech_notes: s.tech_notes ?? {
+          own_pc: false,
+          video: false,
+          audio: false,
+          no_ppt: false,
+        },
+        session_date: s.session_date || "—",
+        session_time: s.session_time || "—",
+        uploaded: s.uploaded ?? false,
+      }));
 
       setEvent(eventData);
       setSpeaker(speakerData);
-      setSessions(sessionsData);
+      setSessions(sessionsWithExtras);
       setRooms(roomsData);
+
+      console.log("Sessions loaded:", sessionsWithExtras);
     } catch (err) {
       console.error("Failed to load data:", err);
     } finally {
@@ -141,6 +162,13 @@ export default function SpeakerSessionsPage() {
 
   const openAddSession = () => {
     setEditing(null);
+
+    // Combine date and time into a proper datetime
+    const sessionDate =
+      event?.start_time?.split("T")[0] ||
+      new Date().toISOString().split("T")[0];
+    const sessionDateTime = `${sessionDate}T09:00:00`;
+
     setForm({
       event_id: eventId,
       speaker_id: speakerId,
@@ -185,25 +213,63 @@ export default function SpeakerSessionsPage() {
       return;
     }
 
-    const data = new FormData(); // ✅ renamed
+    if (!form.session_date || !form.session_time) {
+      alert("Please select date and time");
+      return;
+    }
 
-    data.append("event_id", String(form.event_id));
-    data.append("speaker_id", String(form.speaker_id));
-    data.append("room_id", String(form.room_id));
-
-    if (form.session_date) data.append("session_date", form.session_date);
-    if (form.session_time) data.append("session_time", form.session_time);
-
-    selectedFiles.forEach((file) => {
-      data.append("files", file);
-    });
+    // Create a plain object instead of FormData
+    const sessionData = {
+      event_id: form.event_id,
+      speaker_id: form.speaker_id,
+      room_id: form.room_id,
+      session_date: form.session_date,
+      session_time: form.session_time,
+      has_video: form.tech_notes?.video ?? false,
+      has_audio: form.tech_notes?.audio ?? false,
+      needs_internet: form.tech_notes?.own_pc ?? false,
+      ...(attendeeId && { attendee_id: attendeeId }),
+    };
 
     try {
+      let sessionId: number;
+
+      // Step 1: Create or update the session
       if (editing?.id) {
-        console.log("PUT URL:", `/api/files/uploads/${editing.id}`);
-        await apiPut(`/api/files/uploads/${editing.id}`, data);
+        (await apiPut(
+          `/api/files/${editing.id}`,
+          sessionData, // Now it's a plain object
+        )) as SessionResponse;
+        sessionId = editing.id;
       } else {
-        await apiPost("/api/files/uploads", data);
+        const response = (await apiPost(
+          "/api/files/",
+          sessionData, // Now it's a plain object
+        )) as SessionResponse;
+        sessionId = response.id;
+      }
+
+      // Step 2: If there are files, upload them separately
+      if (selectedFiles.length > 0) {
+        const fileData = new FormData();
+        fileData.append("event_id", String(form.event_id));
+        fileData.append("speaker_id", String(form.speaker_id));
+        fileData.append("has_video", String(form.tech_notes?.video ?? false));
+        fileData.append("has_audio", String(form.tech_notes?.audio ?? false));
+        fileData.append(
+          "needs_internet",
+          String(form.tech_notes?.own_pc ?? false),
+        );
+
+        if (attendeeId) {
+          fileData.append("attendee_id", String(attendeeId));
+        }
+
+        selectedFiles.forEach((file) => {
+          fileData.append("files", file);
+        });
+
+        await apiPost("/api/files/uploads", fileData);
       }
 
       setOpen(false);
@@ -470,7 +536,7 @@ export default function SpeakerSessionsPage() {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={form.tech_notes.own_pc}
+                    checked={form.tech_notes?.own_pc ?? false}
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -487,7 +553,7 @@ export default function SpeakerSessionsPage() {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={form.tech_notes.video}
+                    checked={form.tech_notes?.video ?? false}
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -504,7 +570,7 @@ export default function SpeakerSessionsPage() {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={form.tech_notes.audio}
+                    checked={form.tech_notes?.audio ?? false}
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -521,7 +587,7 @@ export default function SpeakerSessionsPage() {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={form.tech_notes.no_ppt}
+                    checked={form.tech_notes?.no_ppt ?? false}
                     onChange={(e) =>
                       setForm({
                         ...form,
