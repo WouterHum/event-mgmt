@@ -15,12 +15,6 @@ export default function ProtectedLayout({
   if (loaded) return <div>Loading...</div>;
   if (!token) return null; // Redirect handled by the guard
 
-  console.log(`✅ Authenticated user: ${role} on ${pathname}`);
-  console.log(
-    "Browser sees NEXT_PUBLIC_API_URL:",
-    process.env.NEXT_PUBLIC_API_URL
-  );
-
   return (
     <div>
       <NavBar />

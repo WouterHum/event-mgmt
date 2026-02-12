@@ -53,8 +53,6 @@ export default function AttendeesPage() {
         created = await apiPost("/api/attendees/", payload);
       }
 
-      console.log("API response (save):", created);
-
       await load();
       setOpen(false);
       setEditing(null);

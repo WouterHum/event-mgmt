@@ -110,7 +110,6 @@ export default function SpeakerSessionsPage() {
   };
 
   const onAddSession = () => {
-    console.log("Adding new session");
     setEditing(null);
     setOpen(true);
   };
@@ -151,8 +150,6 @@ export default function SpeakerSessionsPage() {
       setSpeaker(speakerData);
       setSessions(sessionsWithExtras);
       setRooms(roomsData);
-
-      console.log("Sessions loaded:", sessionsWithExtras);
     } catch (err) {
       console.error("Failed to load data:", err);
     } finally {
@@ -218,65 +215,53 @@ export default function SpeakerSessionsPage() {
       return;
     }
 
-    // Create a plain object instead of FormData
     const sessionData = {
-      event_id: form.event_id,
-      speaker_id: form.speaker_id,
-      room_id: form.room_id,
+      event_id: Number(form.event_id),
+      speaker_id: Number(form.speaker_id),
+      room_id: Number(form.room_id),
       session_date: form.session_date,
       session_time: form.session_time,
-      has_video: form.tech_notes?.video ?? false,
-      has_audio: form.tech_notes?.audio ?? false,
-      needs_internet: form.tech_notes?.own_pc ?? false,
-      ...(attendeeId && { attendee_id: attendeeId }),
+      has_video: Boolean(form.tech_notes?.video ?? false),
+      has_audio: Boolean(form.tech_notes?.audio ?? false),
+      needs_internet: Boolean(form.tech_notes?.own_pc ?? false),
+      ...(attendeeId && { attendee_id: Number(attendeeId) }),
     };
 
     try {
       let sessionId: number;
 
-      // Step 1: Create or update the session
       if (editing?.id) {
-        (await apiPut(
+        await apiPut<typeof sessionData, SessionResponse>(
           `/api/files/${editing.id}`,
-          sessionData, // Now it's a plain object
-        )) as SessionResponse;
+          sessionData,
+        );
         sessionId = editing.id;
       } else {
-        const response = (await apiPost(
+        const response = await apiPost<typeof sessionData, SessionResponse>(
           "/api/files/",
-          sessionData, // Now it's a plain object
-        )) as SessionResponse;
+          sessionData,
+        );
         sessionId = response.id;
       }
 
-      // Step 2: If there are files, upload them separately
+      // Upload files separately
       if (selectedFiles.length > 0) {
-        const fileData = new FormData();
-        fileData.append("event_id", String(form.event_id));
-        fileData.append("speaker_id", String(form.speaker_id));
-        fileData.append("has_video", String(form.tech_notes?.video ?? false));
-        fileData.append("has_audio", String(form.tech_notes?.audio ?? false));
-        fileData.append(
-          "needs_internet",
-          String(form.tech_notes?.own_pc ?? false),
-        );
-
-        if (attendeeId) {
-          fileData.append("attendee_id", String(attendeeId));
-        }
-
+        const fileFormData = new FormData();
         selectedFiles.forEach((file) => {
-          fileData.append("files", file);
+          fileFormData.append("files", file);
         });
 
-        await apiPost("/api/files/uploads", fileData);
+        await apiPost<FormData, void>(
+          `/api/files/${sessionId}/upload`,
+          fileFormData,
+        );
       }
 
       setOpen(false);
       setEditing(null);
       loadData();
     } catch (err) {
-      console.error(err);
+      console.error("Save error:", err);
       alert("Failed to save session");
     }
   };
@@ -618,7 +603,6 @@ export default function SpeakerSessionsPage() {
 
           <button
             onClick={() => {
-              console.log("BUTTON CLICKED", editing);
               saveSession();
             }}
             className="px-4 py-2 rounded-md text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-500"

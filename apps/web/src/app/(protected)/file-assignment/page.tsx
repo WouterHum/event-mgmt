@@ -68,7 +68,7 @@ export default function FileAssignmentPage() {
 
       // Get list of uploaded files (you'll need to create this endpoint)
       const filesData = await apiGet<UploadedFile[]>(
-        `/api/events/${eventId}/unassigned-files`,
+        `/api/files/${eventId}/unassigned-files`,
       );
       setUploadedFiles(filesData);
 
@@ -114,7 +114,7 @@ export default function FileAssignmentPage() {
 
     try {
       // Move file from uploads folder to session
-      await apiPost(`/api/files/uploads/${assignment.sessionId}/assign-file`, {
+      await apiPost(`/api/files/${assignment.sessionId}/assign-file`, {
         filename: filename,
         event_id: eventId,
       });

@@ -231,29 +231,42 @@ def export_csv(event_id: int, db: Session = Depends(get_db)):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=event_{event_id}_sessions.csv"}
     )
-
 @router.get("/{event_id}/stats")
 def get_event_stats(event_id: int, db: Session = Depends(get_db)):
-    total = (
-        db.query(func.count(Upload.id))
-        .filter(Upload.event_id == event_id)
-        .scalar()
-    )
-
     rows = (
-        db.query(Room.name, func.count(Upload.id))
-        .select_from(Upload)
-        .join(Room, Room.id == Upload.room_id)
+        db.query(Upload, Room)
+        .outerjoin(Room, Upload.room_id == Room.id)
         .filter(Upload.event_id == event_id)
-        .group_by(Room.name)
         .all()
     )
 
+    total = len(rows)
+
+    presentations = []
+    presentations_by_room = {}
+
+    for upload, room in rows:
+        room_name = room.name if room else "Unassigned"
+
+        presentation = {
+            "id": upload.id,
+            "title": upload.filename,
+            "room_id": room.id if room else None,
+            "room_name": room_name
+        }
+
+        presentations.append(presentation)
+        presentations_by_room.setdefault(room_name, []).append({
+            "id": upload.id,
+            "title": upload.filename
+        })
+
     return {
         "total_presentations": total,
-        "room_breakdown": {name: count for name, count in rows}
+        "presentations": presentations,
+        "presentations_by_room": presentations_by_room
     }
-    
+  
 @router.get("/{event_id}/room-status")
 def get_room_status(event_id: int, db: Session = Depends(get_db)):
     """Get room PC status"""

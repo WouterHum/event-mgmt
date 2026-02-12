@@ -69,7 +69,7 @@ export default function RoomUploader({
 
   return (
     <div className="flex flex-col gap-2 mt-2">
-      <label className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-3 py-1 text-sm cursor-pointer hover:bg-primary/90">
+      {/* <label className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-3 py-1 text-sm cursor-pointer hover:bg-primary/90">
         + Select Files
         <input
           type="file"
@@ -77,18 +77,18 @@ export default function RoomUploader({
           className="hidden"
           onChange={handleFileChange}
         />
-      </label>
+      </label> */}
 
-      {files && files.length > 0 && (
+      {/* {files && files.length > 0 && (
         <div className="text-sm text-gray-600">
           {Array.from(files).map((f, i) => (
             <div key={i}>{f.name}</div>
           ))}
         </div>
-      )}
+      )} */}
 
       <div className="flex gap-2">
-        <FormControlLabel
+        {/* <FormControlLabel
           control={
             <Checkbox
               checked={tech.has_video}
@@ -120,10 +120,10 @@ export default function RoomUploader({
             />
           }
           label="Internet"
-        />
+        /> */}
       </div>
 
-      {uploading && <LinearProgress variant="determinate" value={progress} />}
+      {/* {uploading && <LinearProgress variant="determinate" value={progress} />}
 
       <Button
         variant="contained"
@@ -132,7 +132,7 @@ export default function RoomUploader({
         onClick={handleUpload}
       >
         {uploading ? "Uploading..." : "Upload"}
-      </Button>
+      </Button> */}
     </div>
   );
 }

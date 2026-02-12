@@ -61,7 +61,6 @@ export function isTokenExpired(token: string) {
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     const now = Math.floor(Date.now() / 1000);
-    console.log("[isTokenExpired] exp:", payload.exp, "now:", now);
     return payload.exp < now;
   } catch (err) {
     console.error("[isTokenExpired] token parse failed:", err);

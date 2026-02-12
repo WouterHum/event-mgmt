@@ -1,10 +1,12 @@
 from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException, Body
 from fastapi import Path as PathParam
+from fastapi.responses import StreamingResponse
 from pathlib import Path 
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import date, time, datetime
+from pathlib import Path
 import shutil
 import logging
 
@@ -20,7 +22,7 @@ router = APIRouter(
 
 logger = logging.getLogger("uvicorn.error")
 
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR = Path(__file__).parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 # --------------------------
@@ -46,6 +48,17 @@ class UploadUpdateDTO(BaseModel):
     room_id: Optional[int]  # Optional if you don't want to require it
     session_date: Optional[date]
     session_time: Optional[time]
+    
+class SessionCreate(BaseModel):
+    event_id: int
+    speaker_id: int
+    room_id: int
+    session_date: str
+    session_time: str
+    has_video: bool = False
+    has_audio: bool = False
+    needs_internet: bool = False
+    attendee_id: int | None = None
 
 
 # --------------------------
@@ -159,28 +172,20 @@ def manifest(event_id: int, db: Session = Depends(get_db)):
 
 @router.post("/")
 async def create_session(
-    event_id: int = Form(...),
-    speaker_id: int = Form(...),
-    room_id: int = Form(...),
-    session_date: str = Form(...),
-    session_time: str = Form(...),
-    has_video: bool = Form(False),
-    has_audio: bool = Form(False),
-    needs_internet: bool = Form(False),
-    attendee_id: int | None = Form(None),
+    session: SessionCreate,  # Changed from Form(...) parameters
     db: Session = Depends(get_db)
 ):
     """Create new session/upload - validates date within event period"""
     
     # Validate event exists
-    event = db.query(Event).filter(Event.id == event_id).first()
+    event = db.query(Event).filter(Event.id == session.event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
     # Validate date is within event period
-    if session_date:
+    if session.session_date:
         from datetime import datetime
-        session_dt = datetime.strptime(session_date, "%Y-%m-%d").date()
+        session_dt = datetime.strptime(session.session_date, "%Y-%m-%d").date()
         if hasattr(event, 'start_date') and hasattr(event, 'end_date'):
             if not (event.start_date <= session_dt <= event.end_date):
                 raise HTTPException(
@@ -190,19 +195,19 @@ async def create_session(
     
     # Create session object
     session_data = {
-        "event_id": event_id,
-        "speaker_id": speaker_id,
-        "room_id": room_id,
-        "session_date": session_date,
-        "session_time": session_time,
-        "has_video": has_video,
-        "has_audio": has_audio,
-        "needs_internet": needs_internet,
-        "filename": f"presentation_{speaker_id}.pptx"
+        "event_id": session.event_id,
+        "speaker_id": session.speaker_id,
+        "room_id": session.room_id,
+        "session_date": session.session_date,
+        "session_time": session.session_time,
+        "has_video": session.has_video,
+        "has_audio": session.has_audio,
+        "needs_internet": session.needs_internet,
+        "filename": f"presentation_{session.speaker_id}.pptx"
     }
     
-    if attendee_id:
-        session_data["attendee_id"] = attendee_id
+    if session.attendee_id:
+        session_data["attendee_id"] = session.attendee_id
     
     db_session = Upload(**session_data)
     db.add(db_session)
@@ -504,3 +509,43 @@ def delete_upload(upload_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "deleted"}
+
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@router.get("/events/{event_id}/download/{upload_id}")
+def download_upload(event_id: int, upload_id: int, db: Session = Depends(get_db)):
+    """
+    Download a specific uploaded file by its ID for an event
+    """
+    # Get the upload record
+    upload = db.query(Upload).filter(
+        Upload.id == upload_id,
+        Upload.event_id == event_id
+    ).first()
+
+    if not upload:
+        logging.warning(f"Upload record not found: event_id={event_id}, upload_id={upload_id}")
+        raise HTTPException(status_code=404, detail="Upload not found")
+
+    filename = getattr(upload, "filename", None)
+    if not filename:
+        logging.warning(f"Upload has no filename: id={upload_id}")
+        raise HTTPException(status_code=404, detail="File has no filename")
+
+    file_path = UPLOAD_DIR / filename
+    logging.info(f"Trying to serve file: {file_path.resolve()}")
+
+    if not file_path.exists():
+        logging.warning(f"File not found on server: {file_path.resolve()}")
+        raise HTTPException(status_code=404, detail="File not found on server")
+
+    # Stream the file
+    return StreamingResponse(
+        file_path.open("rb"),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

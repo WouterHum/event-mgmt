@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams,useRouter  } from "next/navigation";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import {
   Dialog,
@@ -38,9 +38,20 @@ interface RoomStatus {
   presentation_count: number;
 }
 
+interface Presentation {
+  id: number;
+  title: string;
+  room_id: number;
+  room_name: string;
+}
+
 interface Stats {
   total_presentations: number;
-  room_breakdown: { [key: string]: number };
+  presentations: Presentation[];
+  presentations_by_room: {
+    [roomName: string]: Presentation[];
+  };
+  room_breakdown?: Record<string, number>;
 }
 
 export default function EventDashboardPage() {
@@ -50,7 +61,7 @@ export default function EventDashboardPage() {
   const [event, setEvent] = useState<Event | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [stats, setStats] = useState<Stats | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
 
@@ -62,6 +73,7 @@ export default function EventDashboardPage() {
   // Upload
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (eventId) {
@@ -335,30 +347,98 @@ export default function EventDashboardPage() {
         <div className="space-y-6">
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Total Presentations */}
             <div className="modern-card border border-gray-200 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-2">
                 Total Presentations
               </h3>
-              <p className="text-4xl font-bold text-blue-600">
-                {stats?.total_presentations || 0}
-              </p>
+              {stats?.presentations_by_room &&
+                Object.entries(stats.presentations_by_room).map(
+                  ([roomName, presentations]) => (
+                    <div key={roomName} className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-4xl font-bold text-blue-600">
+                          {roomName}
+                        </h4>
+
+                        {/* Assign Files button for Unassigned */}
+                        {roomName === "Unassigned" &&
+                          presentations.length > 0 && (
+                            <button
+                              onClick={() =>
+                                router.push(
+                                  `/file-assignment?eventId=${eventId}`,
+                                )
+                              }
+                              className="ml-3 px-3 py-1 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
+                            >
+                              Assign Files
+                            </button>
+                          )}
+                      </div>
+
+                      <ul className="ml-4 list-disc text-sm text-gray-700 mt-2">
+                        {presentations.map((p) => (
+                          <li
+                            key={p.id}
+                            className="flex justify-between items-center"
+                          >
+                            <span>{p.title}</span>
+                            <button
+                              onClick={async () => {
+                                const API_BASE =
+                                  process.env.NEXT_PUBLIC_API_URL ||
+                                  "http://localhost:8000";
+                                const response = await fetch(
+                                  `${API_BASE}/api/files/events/${eventId}/download/${p.id}`,
+                                );
+                                if (!response.ok) {
+                                  alert("Failed to download file");
+                                  return;
+                                }
+                                const blob = await response.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = p.title;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                window.URL.revokeObjectURL(url);
+                              }}
+                              className="ml-2 px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                            >
+                              Download
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ),
+                )}
             </div>
 
+            {/* Presentations by Room */}
             <div className="modern-card border border-gray-200 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-4">
                 Presentations by Room
               </h3>
-              {stats?.room_breakdown &&
-              Object.keys(stats.room_breakdown).length > 0 ? (
+              {stats?.presentations_by_room &&
+              Object.keys(stats.presentations_by_room).length > 0 ? (
                 <ul className="space-y-2">
-                  {Object.entries(stats.room_breakdown).map(([room, count]) => (
-                    <li key={room} className="flex justify-between text-sm">
-                      <span className="text-gray-700">{room}</span>
-                      <span className="font-semibold text-gray-900">
-                        {count}
-                      </span>
-                    </li>
-                  ))}
+                  {Object.entries(stats.presentations_by_room).map(
+                    ([roomName, presentations]) => (
+                      <li
+                        key={roomName}
+                        className="flex justify-between text-sm"
+                      >
+                        <span className="text-gray-700">{roomName}</span>
+                        <span className="font-semibold text-gray-900">
+                          {presentations.length}
+                        </span>
+                      </li>
+                    ),
+                  )}
                 </ul>
               ) : (
                 <p className="text-gray-500 text-sm">No presentations yet</p>
@@ -418,6 +498,7 @@ export default function EventDashboardPage() {
           </div>
         </div>
       )}
+
       {/* Room Dialog */}
       <Dialog
         open={roomDialogOpen}

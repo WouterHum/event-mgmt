@@ -16,8 +16,6 @@ export default function NavBar() {
     router.replace("/login");
   };
 
-  //console.log("Auth state:", auth);
-
   return (
     <AppBar position="static" sx={{ mb: 2 }}>
       <Toolbar>

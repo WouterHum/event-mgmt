@@ -15,13 +15,22 @@ export interface AuthData {
 
 const client = axios.create({
   baseURL,
-  //headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 // --- Auth Helpers ---
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem("authToken");
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  // Remove Content-Type for FormData, let browser set it with boundary
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+  
+
   return config;
 });
 
@@ -35,7 +44,7 @@ client.interceptors.response.use(
       window.location.href = "/login";
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export function getAuthToken(): string | null {
@@ -80,7 +89,7 @@ export function setAuth(token: string | null) {
 // --- Axios response handler ---
 
 async function handleAxiosResponse<T>(
-  promise: Promise<AxiosResponse<T>>
+  promise: Promise<AxiosResponse<T>>,
 ): Promise<T> {
   try {
     const res = await promise;
@@ -103,7 +112,7 @@ export default client;
 
 export async function apiGet<T>(
   path: string,
-  config?: AxiosRequestConfig
+  config?: AxiosRequestConfig,
 ): Promise<T> {
   const token = getAuthToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -113,7 +122,7 @@ export async function apiGet<T>(
 export async function apiPost<TRequest, TResponse = unknown>(
   path: string,
   data: TRequest,
-  config?: AxiosRequestConfig
+  config?: AxiosRequestConfig,
 ): Promise<TResponse> {
   const token = getAuthToken();
   const headers = {
@@ -122,38 +131,30 @@ export async function apiPost<TRequest, TResponse = unknown>(
     ...config?.headers,
   };
 
-  // Debug logging
-  if (data instanceof FormData) {
-    console.log("Sending FormData:");
-    for (const pair of data.entries()) {
-      console.log(pair[0], pair[1]);
-    }
-    console.log("Headers:", headers);
-  }
 
   return handleAxiosResponse<TResponse>(
-    client.post(path, data, { ...config, headers })
+    client.post(path, data, { ...config, headers }),
   );
 }
 export async function apiPut<TRequest, TResponse = unknown>(
   path: string,
   data: TRequest,
-  config?: AxiosRequestConfig
+  config?: AxiosRequestConfig,
 ): Promise<TResponse> {
   const token = getAuthToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   return handleAxiosResponse<TResponse>(
-    client.put(path, data, { ...config, headers })
+    client.put(path, data, { ...config, headers }),
   );
 }
 
 export async function apiDelete<TResponse = unknown>(
   path: string,
-  config?: AxiosRequestConfig
+  config?: AxiosRequestConfig,
 ): Promise<TResponse> {
   const token = getAuthToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   return handleAxiosResponse<TResponse>(
-    client.delete(path, { ...config, headers })
+    client.delete(path, { ...config, headers }),
   );
 }

@@ -22,7 +22,6 @@ export default function HomePage() {
 
   const handleLogin = async () => {
     try {
-      console.log("[Login] Sending request to API...");
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
@@ -33,22 +32,13 @@ export default function HomePage() {
         }
       );
 
-      console.log("[Login] Response status:", res.status);
-
       if (!res.ok) throw new Error("Invalid credentials");
 
       const data = await res.json();
-      console.log("[Login] Response data:", data);
 
       saveAuth(data.access_token, data.role, email);
-      console.log("[Login] Saved to localStorage:", {
-        token: data.access_token,
-        role: data.role,
-        email,
-      });
 
       setAuth({ token: data.access_token, role: data.role, email });
-      console.log("[Login] Auth atom set, navigating to dashboard...");
 
       router.push("/dashboard");
     } catch (err: unknown) {
