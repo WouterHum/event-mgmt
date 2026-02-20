@@ -5,11 +5,9 @@ import NavBar from "../components/NavBar";
 
 export default function TechnicianDashboard() {
   const tiles = [
-    { title: "Room Configs", href: "/rooms" },
-    { title: "Workstations", href: "/workstations" },
-    { title: "Attendee Stations", href: "/attendees" },
-    { title: "Presentation Peripherals", href: "/peripherals/presentation" },
-    { title: "Connectivity Peripherals", href: "/peripherals/connectivity" },
+    { title: "Uploads", href: "/uploader" },
+    { title: "Speakers", href: "/speakers" },
+    { title: "Rooms", href: "/rooms" },
   ];
 
   return (

@@ -10,6 +10,8 @@ import {
   TextField,
 } from "@mui/material";
 import { validateFields } from "@/lib/validation";
+import { useAtom } from "jotai";
+import { authAtom } from "@/atoms/authAtom";
 
 interface Speaker {
   id?: number;
@@ -23,8 +25,10 @@ export default function SpeakersPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Speaker | null>(null);
   const [form, setForm] = useState<Speaker>({ name: "", email: "", bio: "" });
-  const [errors, setErrors] = useState<Partial<Record<keyof Speaker, string>>>({});
-
+  const [errors, setErrors] = useState<Partial<Record<keyof Speaker, string>>>(
+    {},
+  );
+  const [auth] = useAtom(authAtom);
   const load = async () => {
     const data = await apiGet<Speaker[]>("/api/speakers/");
     setSpeakers(data);
@@ -107,12 +111,16 @@ export default function SpeakersPage() {
                   >
                     Edit
                   </button>
-                  <button
-                    onClick={() => remove(s.id)}
-                    className="px-3 py-1.5 rounded-lg font-semibold bg-red-100 text-red-700 hover:bg-red-200 border border-red-200 transition"
-                  >
-                    Delete
-                  </button>
+
+                  {/* Only admins can delete */}
+                  {auth.role === "admin" && (
+                    <button
+                      onClick={() => remove(s.id)}
+                      className="px-3 py-1.5 rounded-lg font-semibold bg-red-100 text-red-700 hover:bg-red-200 border border-red-200 transition"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </li>
             ))}

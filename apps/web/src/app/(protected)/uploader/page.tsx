@@ -11,7 +11,9 @@ import {
   LinearProgress,
   Checkbox,
   FormControlLabel,
+  Stack,
 } from "@mui/material";
+import { Autocomplete } from "@mui/material";
 import { apiGet, apiPost } from "@/lib/api";
 
 // --- Types ---
@@ -56,7 +58,6 @@ export default function EventUploaderPage() {
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
 
   const [speakers, setSpeakers] = useState<SpeakerItem[]>([]);
-  const [speakerQuery, setSpeakerQuery] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState<SpeakerItem | null>(
     null,
   );
@@ -88,22 +89,20 @@ export default function EventUploaderPage() {
     })();
   }, []);
 
-  // --- Search speakers client-side ---
-  const searchSpeakers = async () => {
-    if (!speakerQuery.trim() || !selectedEvent) return;
+  // --- Load speakers for selected event ---
+  useEffect(() => {
+    if (!selectedEvent) return;
 
-    try {
-      const allSpeakers = await apiGet<SpeakerItem[]>("/api/speakers/");
-      const filtered = allSpeakers.filter(
-        (s) =>
-          (s.name ?? "").toLowerCase().includes(speakerQuery.toLowerCase()) ||
-          (s.email ?? "").toLowerCase().includes(speakerQuery.toLowerCase()),
-      );
-      setSpeakers(filtered);
-    } catch (err) {
-      console.error("Speaker search failed:", err);
-    }
-  };
+    (async () => {
+      try {
+        const allSpeakers = await apiGet<SpeakerItem[]>("/api/speakers/");
+        // Optionally filter by event if your backend supports it
+        setSpeakers(allSpeakers);
+      } catch (err) {
+        console.error("Failed to load speakers:", err);
+      }
+    })();
+  }, [selectedEvent]);
 
   // --- Select speaker and load sessions ---
   const selectSpeaker = async (speaker: SpeakerItem) => {
@@ -116,13 +115,11 @@ export default function EventUploaderPage() {
     if (!speaker.id || !selectedEvent?.id) return;
 
     try {
-      // Load sessions + rooms
       const [sessionsData, roomsData] = await Promise.all([
         apiGet<SessionItem[]>(`/api/speakers/${speaker.id}/sessions`),
         apiGet<Room[]>(`/api/events/${selectedEvent.id}/rooms`),
       ]);
 
-      // Map room names and default values
       const sessionsWithExtras = sessionsData.map((s) => ({
         ...s,
         room_name: roomsData.find((r) => r.id === s.room_id)?.name ?? "—",
@@ -139,7 +136,7 @@ export default function EventUploaderPage() {
 
       setSessions(sessionsWithExtras);
     } catch (err) {
-      console.error("Failed to load speaker sessions:", err);
+      console.error("Failed to load sessions:", err);
       setSessions([]);
     }
   };
@@ -163,19 +160,10 @@ export default function EventUploaderPage() {
       setUploading(true);
       setProgress(0);
 
-      await apiPost(`/api/files/${selectedSession.id}/upload`, formData, {
-        onUploadProgress: (e: ProgressEvent) => {
-          if (e.total) {
-            setProgress(Math.round((e.loaded * 100) / e.total));
-          }
-        },
-      });
+      await apiPost(`/api/files/${selectedSession.id}/upload`, formData, {});
 
       alert("Files uploaded!");
-      // Refresh sessions to reflect uploaded status
-      if (selectedSpeaker?.id) {
-        selectSpeaker(selectedSpeaker);
-      }
+      if (selectedSpeaker?.id) selectSpeaker(selectedSpeaker);
       setFiles(null);
     } catch (err) {
       console.error(err);
@@ -215,82 +203,72 @@ export default function EventUploaderPage() {
           </CardContent>
         </Card>
 
-        {/* Speaker search */}
+        {/* Speaker selection */}
         {selectedEvent && (
           <Card>
-            <CardContent className="space-y-4">
-              <Typography variant="h6">Search Speaker</Typography>
-              <div className="flex gap-2">
-                <TextField
-                  fullWidth
-                  label="Name or Email"
-                  value={speakerQuery}
-                  onChange={(e) => setSpeakerQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && searchSpeakers()}
-                />
-                <Button variant="contained" onClick={searchSpeakers}>
-                  Search
-                </Button>
-              </div>
-              {/* Results */}
-              {speakers.length > 0 && (
-                <div className="border rounded mt-2">
-                  {speakers.map((s) => (
-                    <div
-                      key={s.id}
-                      className="p-2 cursor-pointer hover:bg-gray-100"
-                      onClick={() => selectSpeaker(s)}
-                    >
-                      {s.name ?? "Unnamed"} ({s.email ?? "No email"})
-                    </div>
-                  ))}
-                </div>
-              )}
+            <CardContent>
+              <Typography variant="h6">Select Speaker</Typography>
+              <Autocomplete
+                options={speakers}
+                getOptionLabel={(option) =>
+                  option.name
+                    ? `${option.name} (${option.email ?? "no email"})`
+                    : (option.email ?? "Unnamed")
+                }
+                value={selectedSpeaker}
+                onChange={(_, newValue) => {
+                  if (newValue) selectSpeaker(newValue);
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Speaker"
+                    variant="outlined"
+                    fullWidth
+                  />
+                )}
+              />
             </CardContent>
           </Card>
         )}
 
-        {/* Speaker sessions */}
-        {selectedSpeaker && (
+        {/* Sessions */}
+        {selectedSpeaker && sessions.length > 0 && (
           <Card>
             <CardContent className="space-y-4">
               <Typography variant="h6">
                 Sessions for {selectedSpeaker.name ?? "Unknown"}
               </Typography>
-              {sessions.length > 0 ? (
-                <div className="space-y-2">
-                  {sessions.map((s) => (
-                    <Card
-                      key={s.id}
-                      className={`p-3 cursor-pointer border ${
-                        selectedSession?.id === s.id
-                          ? "border-primary"
-                          : "border-gray-200"
-                      }`}
-                      onClick={() => setSelectedSession(s)}
-                    >
-                      <div>
-                        <strong>{s.title ?? "Untitled Session"}</strong>
-                      </div>
-                      <div>Room: {s.room_name}</div>
-                      <div>Date: {s.session_date}</div>
-                      <div>Time: {s.session_time}</div>
-                      <div>
-                        Uploaded:{" "}
-                        <span
-                          className={
-                            s.uploaded ? "text-green-600" : "text-red-600"
-                          }
-                        >
-                          {s.uploaded ? "Yes" : "No"}
-                        </span>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-gray-500">No sessions found</div>
-              )}
+              <Stack spacing={2}>
+                {sessions.map((s) => (
+                  <Card
+                    key={s.id}
+                    className={`p-3 cursor-pointer border ${
+                      selectedSession?.id === s.id
+                        ? "border-primary"
+                        : "border-gray-200"
+                    }`}
+                    onClick={() => setSelectedSession(s)}
+                  >
+                    <div>
+                      <strong>{s.title ?? "Untitled Session"}</strong>
+                    </div>
+                    <div>Room: {s.room_name}</div>
+                    <div>Date: {s.session_date}</div>
+                    <div>Time: {s.session_time}</div>
+                    <div>
+                      Uploaded:{" "}
+                      <span
+                        className={
+                          s.uploaded ? "text-green-600" : "text-red-600"
+                        }
+                      >
+                        {s.uploaded ? "Yes" : "No"}
+                      </span>
+                    </div>
+                  </Card>
+                ))}
+              </Stack>
             </CardContent>
           </Card>
         )}
@@ -298,80 +276,106 @@ export default function EventUploaderPage() {
         {/* File uploader + tech notes */}
         {selectedSession && (
           <Card>
-            <CardContent className="space-y-4">
-              <Typography variant="h6">Upload Files for Session</Typography>
-              <label className="inline-flex items-center justify-center rounded-md bg-primary text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-primary/90 cursor-pointer">
-                Select Files
-                <input
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-              </label>
-              {files && files.length > 0 && (
-                <ul className="list-disc list-inside">
-                  {Array.from(files).map((f, i) => (
-                    <li key={i}>{f.name}</li>
-                  ))}
-                </ul>
-              )}
-              {uploading && (
-                <LinearProgress variant="determinate" value={progress} />
-              )}
-              <Button
-                variant="contained"
-                onClick={handleUpload}
-                disabled={!files || uploading}
-              >
-                {uploading ? "Uploading..." : "Upload"}
-              </Button>
+            <CardContent>
+              <Stack spacing={3}>
+                {/* Header */}
+                <Typography variant="h6">Upload Files for Session</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Step 1: Click the area below to select files.
+                  <br />
+                  Step 2: Click "Upload Files" to start uploading.
+                </Typography>
 
-              {/* Tech Notes */}
-              <div className="mt-4 space-y-1">
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={techNotes.has_video}
-                      onChange={(e) =>
-                        setTechNotes({
-                          ...techNotes,
-                          has_video: e.target.checked,
-                        })
-                      }
-                    />
-                  }
-                  label="Contains video"
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={techNotes.has_audio}
-                      onChange={(e) =>
-                        setTechNotes({
-                          ...techNotes,
-                          has_audio: e.target.checked,
-                        })
-                      }
-                    />
-                  }
-                  label="Contains audio"
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={techNotes.needs_internet}
-                      onChange={(e) =>
-                        setTechNotes({
-                          ...techNotes,
-                          needs_internet: e.target.checked,
-                        })
-                      }
-                    />
-                  }
-                  label="Requires Internet"
-                />
-              </div>
+                {/* File Select Button */}
+                <Button
+                  variant="outlined"
+                  component="label"
+                  fullWidth
+                  sx={{ borderStyle: "dashed", height: 120, fontSize: "1rem" }}
+                >
+                  Click Here to Select Files
+                  <input
+                    type="file"
+                    hidden
+                    multiple
+                    onChange={handleFileChange}
+                  />
+                </Button>
+
+                {/* Selected Files List */}
+                {files && files.length > 0 && (
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Selected Files:
+                    </Typography>
+                    <ul style={{ margin: 0, paddingLeft: 20 }}>
+                      {Array.from(files).map((f, i) => (
+                        <li key={`${f.name}-${i}`}>{f.name}</li>
+                      ))}
+                    </ul>
+                  </Card>
+                )}
+
+                {/* Upload Progress */}
+                {uploading && (
+                  <LinearProgress variant="determinate" value={progress} />
+                )}
+
+                {/* Tech Notes */}
+                <Stack spacing={1}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={techNotes.has_video}
+                        onChange={(e) =>
+                          setTechNotes({
+                            ...techNotes,
+                            has_video: e.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label="Contains video"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={techNotes.has_audio}
+                        onChange={(e) =>
+                          setTechNotes({
+                            ...techNotes,
+                            has_audio: e.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label="Contains audio"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={techNotes.needs_internet}
+                        onChange={(e) =>
+                          setTechNotes({
+                            ...techNotes,
+                            needs_internet: e.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label="Requires Internet"
+                  />
+                  {/* Upload Button */}
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={handleUpload}
+                    disabled={!files || uploading}
+                  >
+                    {uploading ? "Uploading..." : "Upload Files"}
+                  </Button>
+                </Stack>
+              </Stack>
             </CardContent>
           </Card>
         )}

@@ -1,17 +1,10 @@
 "use client";
 
-import { Typography, Stack, Card, CardContent, Button } from "@mui/material";
+import { Typography, Stack, Card, CardContent } from "@mui/material";
 import NavBar from "../components/NavBar";
+import EventViewerDashboard from "./event/page"; // import your component
 
 export default function ClientDashboard() {
-  const tiles = [
-    { title: "My Events", href: "/events" },
-    { title: "Keynotes & Presentations", href: "/uploads" },
-    { title: "Speakers", href: "/speakers" },
-    { title: "Rooms", href: "/rooms" },
-    { title: "Moderators", href: "/moderators" },
-  ];
-
   return (
     <div>
       <NavBar />
@@ -21,22 +14,17 @@ export default function ClientDashboard() {
         </Typography>
 
         <Stack direction="row" spacing={2} flexWrap="wrap">
-          {tiles.map((t) => (
-            <Card
-              key={t.title}
-              sx={{
-                width: { xs: "100%", sm: "48%", md: "30%" },
-                mb: 2,
-              }}
-            >
-              <CardContent className="flex flex-col gap-4">
-                <Typography variant="h6">{t.title}</Typography>
-                <Button href={t.href} variant="outlined">
-                  Open
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+          {/* Render EventViewerDashboard directly */}
+          <Card
+            sx={{
+              width: { xs: "100%", sm: "48%", md: "100%" }, // full width for dashboard
+              mb: 2,
+            }}
+          >
+            <CardContent>
+              <EventViewerDashboard />
+            </CardContent>
+          </Card>
         </Stack>
       </div>
     </div>

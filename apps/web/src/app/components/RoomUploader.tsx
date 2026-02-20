@@ -8,7 +8,6 @@ import {
   FormControlLabel,
 } from "@mui/material";
 import axios from "axios";
-import { UploadItem } from "@/types";
 
 interface RoomUploaderProps {
   roomId: number;
@@ -50,7 +49,7 @@ export default function RoomUploader({
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
           const percent = Math.round(
-            (progressEvent.loaded * 100) / (progressEvent.total || 1)
+            (progressEvent.loaded * 100) / (progressEvent.total || 1),
           );
           setProgress(percent);
         },

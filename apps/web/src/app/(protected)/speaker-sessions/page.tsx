@@ -85,34 +85,15 @@ export default function SpeakerSessionsPage() {
     session_date: "",
     session_time: "",
     tech_notes: {
+      no_ppt: false,
       own_pc: false,
       video: false,
       audio: false,
-      no_ppt: false,
     },
     uploaded: false,
   });
 
   type EditState = { id?: number } | null;
-
-  const onEdit = (session: Session) => {
-    setEditing({ id: session.id });
-
-    //setAttendeeId(session.attendee_id);
-    setEvent(session.event);
-    setSpeaker(session.speaker);
-
-    setRoomId(session.room_id);
-    setSessionDate(session.session_date);
-    setSessionTime(session.session_time);
-
-    setOpen(true);
-  };
-
-  const onAddSession = () => {
-    setEditing(null);
-    setOpen(true);
-  };
 
   useEffect(() => {
     loadData();
@@ -383,22 +364,22 @@ export default function SpeakerSessionsPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
                       <div className="flex gap-2 flex-wrap">
-                        {session.tech_notes.own_pc && (
+                        {session.tech_notes?.own_pc && (
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
                             Own PC
                           </span>
                         )}
-                        {session.tech_notes.video && (
+                        {session.tech_notes?.video && (
                           <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs">
                             Video
                           </span>
                         )}
-                        {session.tech_notes.audio && (
+                        {session.tech_notes?.audio && (
                           <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
                             Audio
                           </span>
                         )}
-                        {session.tech_notes.no_ppt && (
+                        {session.tech_notes?.no_ppt && (
                           <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs">
                             No PPT
                           </span>
@@ -526,8 +507,10 @@ export default function SpeakerSessionsPage() {
                       setForm({
                         ...form,
                         tech_notes: {
-                          ...form.tech_notes,
                           own_pc: e.target.checked,
+                          video: form.tech_notes?.video ?? false,
+                          audio: form.tech_notes?.audio ?? false,
+                          no_ppt: form.tech_notes?.no_ppt ?? false,
                         },
                       })
                     }
@@ -543,8 +526,10 @@ export default function SpeakerSessionsPage() {
                       setForm({
                         ...form,
                         tech_notes: {
-                          ...form.tech_notes,
+                          own_pc: form.tech_notes?.own_pc ?? false,
                           video: e.target.checked,
+                          audio: form.tech_notes?.audio ?? false,
+                          no_ppt: form.tech_notes?.no_ppt ?? false,
                         },
                       })
                     }
@@ -560,8 +545,10 @@ export default function SpeakerSessionsPage() {
                       setForm({
                         ...form,
                         tech_notes: {
-                          ...form.tech_notes,
+                          own_pc: form.tech_notes?.own_pc ?? false,
+                          video: form.tech_notes?.video ?? false,
                           audio: e.target.checked,
+                          no_ppt: form.tech_notes?.no_ppt ?? false,
                         },
                       })
                     }
@@ -577,7 +564,9 @@ export default function SpeakerSessionsPage() {
                       setForm({
                         ...form,
                         tech_notes: {
-                          ...form.tech_notes,
+                          own_pc: form.tech_notes?.own_pc ?? false,
+                          video: form.tech_notes?.video ?? false,
+                          audio: form.tech_notes?.audio ?? false,
                           no_ppt: e.target.checked,
                         },
                       })

@@ -26,6 +26,7 @@ export interface Room {
   equipment?: string;
   ip_address?: string | null;
   status: RoomStatus;
+  presentations?: Presentation[];
 }
 
 export interface Attendee {
@@ -44,3 +45,26 @@ export type User = {
   is_active: boolean;
   created_at: string;
 };
+
+export interface Upload {
+  id: number;
+  event_id: number;
+  speaker_id: number;
+  filename: string;
+  size_bytes: number;
+  has_video: boolean;
+  has_audio: boolean;
+  needs_internet: boolean;
+  etag?: string;
+  updated_at?: string;
+  attendee_id?: number;
+  room_id?: number;
+  session_date?: string;
+  session_time?: string;
+  uploaded: boolean;
+}
+
+export interface Presentation {
+  id: number;
+  fileName: string;
+}

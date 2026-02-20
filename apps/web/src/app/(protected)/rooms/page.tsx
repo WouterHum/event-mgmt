@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Room, Presentation } from "@/types";
+import { Room, Upload } from "@/types";
 import { apiGet, apiPut, apiPost, apiDelete } from "@/lib/api";
 import { validateFields } from "@/lib/validation";
 import RoomStatusIndicator from "@/app/components/RoomStatusIndicator";
 import UploadPresentations from "@/app/components/RoomUploader";
+import { useAtom } from "jotai";
+import { authAtom } from "@/atoms/authAtom";
 
 export default function RoomsPage() {
+  const [auth] = useAtom(authAtom); // get current user role
   const [rooms, setRooms] = useState<Room[]>([]);
   const [pingingRoomId, setPingingRoomId] = useState<number | null>(null);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploads, setUploads] = useState<Upload[]>([]);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [pingSuccessRoomId, setPingSuccessRoomId] = useState<number | null>(
     null,
@@ -35,14 +39,12 @@ export default function RoomsPage() {
     return () => clearInterval(interval);
   }, [load]);
 
-  // FIXED: ping then reload full room list
   const pingRoomNow = async (roomId: number) => {
     try {
       setPingingRoomId(roomId);
       await apiPut(`/api/rooms/${roomId}/ping`, {});
       await load();
       setPingSuccessRoomId(roomId);
-
       setTimeout(() => setPingSuccessRoomId(null), 2000);
     } catch (err) {
       console.error("Ping failed", err);
@@ -88,6 +90,7 @@ export default function RoomsPage() {
             layout: "",
             equipment: "",
             ip_address: "",
+            status: "offline",
           });
           setIsModalOpen(true);
         }}
@@ -116,32 +119,26 @@ export default function RoomsPage() {
               <p className="text-sm text-gray-500 mt-1">
                 Capacity: {r.capacity ?? "N/A"}
               </p>
-
               {r.location && (
                 <p className="text-sm text-gray-500">Location: {r.location}</p>
               )}
-
               {r.layout && (
                 <p className="text-sm text-gray-500">Layout: {r.layout}</p>
               )}
-
               {r.equipment && (
                 <p className="text-sm text-gray-500">
                   Equipment: {r.equipment}
                 </p>
               )}
-
-              {/* ✅ FIXED CONDITION */}
               {r.ip_address && (
                 <p className="text-sm text-gray-500">
                   IP Address: {r.ip_address}
                 </p>
               )}
 
-              {/* Presentations */}
               {r.presentations && r.presentations.length > 0 ? (
                 <ul className="mt-2 text-sm max-h-32 overflow-y-auto border p-2 rounded space-y-1">
-                  {r.presentations.map((p: Presentation) => (
+                  {r.presentations.map((p) => (
                     <li
                       key={p.id}
                       className="flex items-center gap-2 truncate"
@@ -183,12 +180,15 @@ export default function RoomsPage() {
                 Edit
               </button>
 
-              <button
-                onClick={() => remove(r.id)}
-                className="bg-red-50 text-red-600 px-3 py-1 rounded text-sm hover:bg-red-100 transition"
-              >
-                Delete
-              </button>
+              {/* Only show Delete to admins */}
+              {auth.role === "admin" && (
+                <button
+                  onClick={() => remove(r.id)}
+                  className="bg-red-50 text-red-600 px-3 py-1 rounded text-sm hover:bg-red-100 transition"
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         ))}

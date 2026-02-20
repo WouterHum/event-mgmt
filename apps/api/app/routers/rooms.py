@@ -24,24 +24,25 @@ def list_rooms(db: Session = Depends(get_db)):
     )
 
     return [
-        {
-            "id": r.id,
-            "name": r.name,
-            "capacity": r.capacity,
-            "location": r.location,
-            "layout": r.layout,
-            "equipment": r.equipment,
-            "ip_address": r.ip_address,
-            "presentations": [
-                {
-                    "id": u.id,
-                    "fileName": u.filename
-                }
-                for u in r.uploads
-            ]
-        }
-        for r in rooms
-    ]
+    {
+        "id": r.id,
+        "name": r.name,
+        "capacity": r.capacity,
+        "location": r.location,
+        "layout": r.layout,
+        "equipment": r.equipment,
+        "ip_address": r.ip_address,
+        "status": r.status, 
+        "presentations": [
+            {
+                "id": u.id,
+                "fileName": u.filename
+            }
+            for u in r.uploads
+        ]
+    }
+    for r in rooms
+]
 
 @router.post("/")
 def add_room(payload: dict, db: Session = Depends(get_db), user=Depends(require_roles("admin"))):
@@ -117,7 +118,7 @@ def ping_room(room_id: int, db: Session = Depends(get_db)):
     is_online = scanner.ping_host(room.ip_address)
     
     # Update room status
-    room.status = "green" if is_online else "red"
+    room.status = "online" if is_online else "offline"
     db.commit()
     
     return {
@@ -161,7 +162,7 @@ def scan_room(
     is_online = scanner.ping_host(room.ip_address)
     
     # Update room status
-    room.status = "green" if is_online else "red"
+    room.status = "online" if is_online else "offline"
     db.commit()
     
     if not is_online:

@@ -49,7 +49,7 @@ class Event(Base):
     location = Column(String(255))
     created_by = Column(Integer, ForeignKey("users.id"))
 
-RoomStatus = Literal["red", "amber", "green", "blue"]
+RoomStatus = Literal["offline" , "busy" , "online" , "synced"]
 class Room(Base):
     __tablename__ = "rooms"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -59,7 +59,7 @@ class Room(Base):
     layout = Column(String(255), nullable=True)  
     equipment = Column(Text, nullable=True) 
     status: Mapped[str] = mapped_column(
-    Enum("red", "amber", "green", "blue", name="room_status"),
+    Enum("offline" , "busy" , "online" , "synced", name="room_status"),
     nullable=False,
     default="red")
     ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
