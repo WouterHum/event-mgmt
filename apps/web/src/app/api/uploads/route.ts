@@ -4,13 +4,10 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
 
-    const backendRes = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/uploads`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
+    const backendRes = await fetch("/api/uploads", {
+      method: "POST",
+      body: formData,
+    });
 
     const data = await backendRes.json();
     return NextResponse.json(data, { status: backendRes.status });

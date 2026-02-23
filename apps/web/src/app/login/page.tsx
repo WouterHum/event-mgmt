@@ -9,9 +9,10 @@ import {
 } from "@mui/material";
 import { LockOutlined } from "@mui/icons-material";
 import { useSetAtom } from "jotai";
-import { authAtom } from "@/atoms/authAtom"; 
+import { authAtom } from "@/atoms/authAtom";
 import { saveAuth } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { getBaseURL } from "@/lib/apiBase";
 
 export default function HomePage() {
   const [email, setEmail] = useState("");
@@ -22,32 +23,33 @@ export default function HomePage() {
 
   const handleLogin = async () => {
     try {
+      const API_BASE = getBaseURL();
+      console.log("[Login] Posting to:", `${API_BASE}/api/auth/login`);
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      if (!res.ok) throw new Error("Invalid credentials");
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("[Login] Response not OK:", res.status, text);
+        throw new Error("Invalid credentials");
+      }
 
       const data = await res.json();
+      console.log("[Login] Success:", data);
 
       saveAuth(data.access_token, data.role, email);
-
-      setAuth({ token: data.access_token, role: data.role, email });
+      setAuth(data.access_token);
 
       router.push("/dashboard");
     } catch (err: unknown) {
       console.error("[Login] Error:", err);
-      if (err instanceof Error) {
-        setMessage(err.message);
-      } else {
-        setMessage("An unexpected error occurred");
-      }
+      setMessage(
+        err instanceof Error ? err.message : "An unexpected error occurred",
+      );
     }
   };
 

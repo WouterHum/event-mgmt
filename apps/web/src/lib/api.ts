@@ -5,7 +5,25 @@ import { getDefaultStore } from "jotai";
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 
 const store = getDefaultStore();
-const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Detect correct API base URL for dev + client LAN
+const getBaseURL = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+
+  if (typeof window !== "undefined") {
+    // If running in browser, detect hostname
+    const hostname = window.location.hostname;
+    // localhost → use local container
+    if (hostname === "localhost") return "http://localhost:8000";
+    // LAN access → same IP, backend on 8000
+    return `http://${hostname}:8000`;
+  }
+
+  // fallback for SSR or unknown
+  return "http://localhost:8000";
+};
+
+const baseURL = getBaseURL();
+console.log("[Login] Using API_BASE:", baseURL);
 
 export interface AuthData {
   token: string;
@@ -29,7 +47,6 @@ client.interceptors.request.use((config) => {
   if (config.data instanceof FormData) {
     delete config.headers["Content-Type"];
   }
-  
 
   return config;
 });
@@ -130,7 +147,6 @@ export async function apiPost<TRequest, TResponse = unknown>(
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...config?.headers,
   };
-
 
   return handleAxiosResponse<TResponse>(
     client.post(path, data, { ...config, headers }),

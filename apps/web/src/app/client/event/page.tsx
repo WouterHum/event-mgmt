@@ -129,12 +129,14 @@ export default function EventViewerDashboard() {
                       <span>{p.title}</span>
                       <button
                         onClick={async () => {
-                          const API_BASE =
-                            process.env.NEXT_PUBLIC_API_URL ||
-                            "http://localhost:8000";
                           const response = await fetch(
-                            `${API_BASE}/api/files/events/${selectedEventId}/download/${p.id}`,
+                            `/api/files/events/${selectedEventId}/download/${p.id}`,
                           );
+
+                          if (!response.ok) {
+                            alert("Failed to download file");
+                            return;
+                          }
                           if (!response.ok) return alert("Download failed");
                           const blob = await response.blob();
                           const url = window.URL.createObjectURL(blob);

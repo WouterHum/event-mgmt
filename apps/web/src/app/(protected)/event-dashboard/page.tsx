@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams,useRouter  } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import {
   Dialog,
@@ -153,15 +153,10 @@ export default function EventDashboardPage() {
         formData.append("files", file);
       });
 
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(
-        `${API_BASE}/api/events/${eventId}/upload-bulk`,
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
+      const response = await fetch(`/api/events/${eventId}/upload-bulk`, {
+        method: "POST",
+        body: formData,
+      });
 
       if (!response.ok) throw new Error("Upload failed");
 
@@ -180,11 +175,7 @@ export default function EventDashboardPage() {
 
   const handleExportCSV = async () => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(
-        `${API_BASE}/api/events/${eventId}/export/csv`,
-      );
+      const response = await fetch(`/api/events/${eventId}/export/csv`);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -386,12 +377,10 @@ export default function EventDashboardPage() {
                             <span>{p.title}</span>
                             <button
                               onClick={async () => {
-                                const API_BASE =
-                                  process.env.NEXT_PUBLIC_API_URL ||
-                                  "http://localhost:8000";
                                 const response = await fetch(
-                                  `${API_BASE}/api/files/events/${eventId}/download/${p.id}`,
+                                  `/api/files/events/${eventId}/download/${p.id}`,
                                 );
+
                                 if (!response.ok) {
                                   alert("Failed to download file");
                                   return;

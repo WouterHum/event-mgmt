@@ -25,12 +25,14 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 if ENVIRONMENT == "production":
     allowed_origins = [
         "https://main.dov6w328993cl.amplifyapp.com",
+        "http://192.168.0.130:3000"
         # Add other production domains if needed
     ]
 else:
     allowed_origins = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://192.168.224.1:3000"
     ]
 
 # CORS configuration

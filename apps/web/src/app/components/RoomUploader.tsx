@@ -42,8 +42,7 @@ export default function RoomUploader({
     formData.append("needs_internet", String(tech.needs_internet));
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
-      const url = `${baseUrl}/api/rooms/${roomId}/uploads`;
+      const url = `/api/rooms/${roomId}/uploads`;
 
       await axios.post(url, formData, {
         headers: { "Content-Type": "multipart/form-data" },
