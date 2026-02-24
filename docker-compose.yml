@@ -4,7 +4,7 @@ services:
   api:
     build: ./apps/api
     container_name: event-mgmt-api
-    restart: unless-stopped	
+    restart: unless-stopped
     env_file: ./apps/api/.env
     volumes:
       - ./apps/api:/app
@@ -21,10 +21,10 @@ services:
     container_name: event-mgmt-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass       
+      MYSQL_ROOT_PASSWORD: rootpass
       MYSQL_DATABASE: event_mgmt
-      MYSQL_USER: event_user             
-      MYSQL_PASSWORD: eventpass          
+      MYSQL_USER: event_user
+      MYSQL_PASSWORD: eventpass
     ports:
       - "3306:3306"
     healthcheck:
@@ -34,12 +34,11 @@ services:
 
   web:
     build:
-      context: ./apps/web   # <-- this must point to the folder containing package.json
+      context: ./apps/web # <-- this must point to the folder containing package.json
       dockerfile: Dockerfile
     container_name: event-mgmt-web
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
       - CI=true
     volumes:
       - ./apps/web:/app

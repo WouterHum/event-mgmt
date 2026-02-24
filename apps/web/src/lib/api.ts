@@ -6,19 +6,26 @@ import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 
 const store = getDefaultStore();
 // Detect correct API base URL for dev + client LAN
-const getBaseURL = () => {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-
-  if (typeof window !== "undefined") {
-    // If running in browser, detect hostname
-    const hostname = window.location.hostname;
-    // localhost → use local container
-    if (hostname === "localhost") return "http://localhost:8000";
-    // LAN access → same IP, backend on 8000
-    return `http://${hostname}:8000`;
+export const getBaseURL = () => {
+  // 1️⃣ If explicitly defined at build time, use it
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
 
-  // fallback for SSR or unknown
+  // 2️⃣ If in browser, detect current hostname
+  if (typeof window !== "undefined") {
+    const { protocol, hostname } = window.location;
+
+    // Local dev
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "http://localhost:8000";
+    }
+
+    // LAN / deployed on same host
+    return `${protocol}//${hostname}:8000`;
+  }
+
+  // 3️⃣ Fallback (SSR)
   return "http://localhost:8000";
 };
 
