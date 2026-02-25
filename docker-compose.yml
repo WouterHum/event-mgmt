@@ -27,6 +27,8 @@ services:
       MYSQL_PASSWORD: eventpass
     ports:
       - "3306:3306"
+    volumes:
+      - event_mgmt_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
