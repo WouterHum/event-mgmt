@@ -154,13 +154,25 @@ export default function EventUploaderPage() {
     }
 
     const formData = new FormData();
-    Array.from(files).forEach((file) => formData.append("file", file));
+
+    formData.append("event_id", String(selectedEvent?.id));
+    formData.append("session_id", String(selectedSession?.id));
+    formData.append("speaker_id", String(selectedSpeaker?.id));
+
+    Array.from(files).forEach((file) => formData.append("files", file)); // ✅ match FastAPI
+
+    formData.append("has_video", techNotes.has_video ? "true" : "false");
+    formData.append("has_audio", techNotes.has_audio ? "true" : "false");
+    formData.append(
+      "needs_internet",
+      techNotes.needs_internet ? "true" : "false",
+    );
 
     try {
       setUploading(true);
       setProgress(0);
 
-      await apiPost(`/api/files/${selectedSession.id}/upload`, formData, {});
+      await apiPost(`/api/files/uploads/bulk`, formData, {}); // or /uploads/bulk if you switched to bulk endpoint
 
       alert("Files uploaded!");
       if (selectedSpeaker?.id) selectSpeaker(selectedSpeaker);
@@ -212,8 +224,8 @@ export default function EventUploaderPage() {
                 options={speakers}
                 getOptionLabel={(option) =>
                   option.name
-                    ? `${option.name} (${option.email ?? "no email"})`
-                    : (option.email ?? "Unnamed")
+                    ? `${option.name} (${option.email ?? ""})`
+                    : (option.email ?? "")
                 }
                 value={selectedSpeaker}
                 onChange={(_, newValue) => {
@@ -283,7 +295,7 @@ export default function EventUploaderPage() {
                 <Typography variant="body2" color="text.secondary">
                   Step 1: Click the area below to select files.
                   <br />
-                  Step 2: Click "Upload Files" to start uploading.
+                  Step 2: Click Upload Files to start uploading.
                 </Typography>
 
                 {/* File Select Button */}

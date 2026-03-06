@@ -82,11 +82,13 @@ class Upload(Base):
     attendee_id = Column(Integer, ForeignKey("attendees.id"), nullable=True)  
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True)  
     session_date = Column(DateTime, nullable=True) 
+    session_time = Column(Time, nullable=True)
     filename = Column(String(512), nullable=False)
     size_bytes = Column(Integer)
     has_video: Mapped[bool] = mapped_column(Boolean, default=False)
     has_audio: Mapped[bool] = mapped_column(Boolean, default=False)
     needs_internet: Mapped[bool] = mapped_column(Boolean, default=False)
+    uploaded: Mapped[bool] = mapped_column(Boolean, default=True)
 
     etag: Mapped[str | None] = mapped_column(String(128), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
@@ -95,9 +97,6 @@ class Upload(Base):
         onupdate=datetime.utcnow,
         nullable=False
     )
-    
-    session_date = Column(Date, nullable=True)
-    session_time = Column(Time, nullable=True)
 
     event = relationship("Event")
     speaker = relationship("Speaker")

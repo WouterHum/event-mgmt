@@ -29,3 +29,4 @@ python-multipart==0.0.17
 SQLAlchemy==2.0.35
 PyJWT==2.9.0
 cryptography==41.0.3
+paramiko==3.3.1

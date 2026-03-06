@@ -5,8 +5,21 @@ from ..models import Speaker, Upload, Room
 from ..deps import require_roles
 import csv
 from fastapi import UploadFile
+from pydantic import BaseModel
+from app.models import Speaker, Event
+from typing import List
+from sqlalchemy import Table, MetaData, insert
 
 router = APIRouter()
+
+# Pydantic schema for bulk upload
+class SpeakerBulkItem(BaseModel):
+    name: str
+    email: str | None = None
+    bio: str | None = None
+
+class SpeakerBulkRequest(BaseModel):
+    speakers: List[SpeakerBulkItem]
 
 # Helper function to safely get attribute from Upload that might not exist yet
 def safe_getattr(obj, attr, default=None):
@@ -137,3 +150,39 @@ def get_speaker_sessions(speaker_id: int, db: Session = Depends(get_db)):
         enriched.append(session_dict)
     
     return enriched
+
+@router.post("/bulk")
+def bulk_add_speakers(speakers: List[dict], db: Session = Depends(get_db)):
+    """
+    Bulk add speakers and link them to their event.
+    Each dict in speakers must include:
+        - name (required)
+        - email (optional)
+        - bio (optional)
+        - event_id (required)
+    """
+    if not speakers:
+        raise HTTPException(status_code=400, detail="No speakers provided")
+
+    metadata = MetaData()
+    event_speakers = Table('event_speakers', metadata, autoload_with=db.get_bind())
+
+    added_count = 0
+    for s in speakers:
+        event_id = s.pop("event_id", None)
+        if not event_id or not s.get("name"):
+            continue  # skip invalid rows
+
+        # 1️⃣ Create speaker
+        db_speaker = Speaker(**s)
+        db.add(db_speaker)
+        db.flush()  # get ID without committing
+
+        # 2️⃣ Link to event via junction table
+        stmt = insert(event_speakers).values(event_id=event_id, speaker_id=db_speaker.id)
+        db.execute(stmt)
+
+        added_count += 1
+
+    db.commit()
+    return {"added": added_count}

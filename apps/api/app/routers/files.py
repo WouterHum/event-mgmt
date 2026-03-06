@@ -23,7 +23,7 @@ router = APIRouter(
 logger = logging.getLogger("uvicorn.error")
 
 UPLOAD_DIR = Path(__file__).parent / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # --------------------------
 # Pydantic DTOs
@@ -296,66 +296,33 @@ def upload_presentation(session_id: int, file: UploadFile = File(...), db: Sessi
 def get_unassigned_files(event_id: int, db: Session = Depends(get_db)):
     """Get list of files in uploads folder that haven't been assigned to sessions"""
     upload_dir = Path("uploads")
-    
     if not upload_dir.exists():
         return []
-    
-    # Get all files in uploads folder that start with this event_id
+
     event_prefix = f"{event_id}_"
-    all_files = []
-    try:
-        for f in upload_dir.iterdir():
-            if f.is_file() and not f.name.startswith('.'):
-                # Check if file belongs to this event
-                if f.name.startswith(event_prefix):
-                    all_files.append(f.name)
-    except Exception as e:
-        print(f"Error reading upload directory: {e}")
-        return []
-    
-    # Get all filenames already assigned to sessions for this event
-    # These are stored WITHOUT the event_id prefix in most cases
-    try:
-        assigned_files = db.query(Upload.filename).filter(
-            Upload.event_id == event_id,
-            Upload.filename.isnot(None)
-        ).all()
-        assigned_filenames = {f[0] for f in assigned_files if f[0]}
-    except AttributeError:
-        # If Upload doesn't have filename attribute (before migration), return all files as unassigned
-        assigned_filenames = set()
-    
-    # Return files that aren't assigned yet
-    # A file is "assigned" if its full name (1_file.bmp) OR its stripped name (file.bmp) is in the DB
+    all_files = [f for f in upload_dir.iterdir() if f.is_file() and not f.name.startswith('.') and f.name.startswith(event_prefix)]
+
+    # Get all filenames in DB that have been assigned to a session
+    assigned_files = db.query(Upload.filename).filter(
+        Upload.event_id == event_id,
+        (Upload.room_id.isnot(None)) | (Upload.speaker_id.isnot(None)) | (Upload.session_date.isnot(None))
+    ).all()
+    assigned_filenames = {f[0] for f in assigned_files if f[0]}
+
     unassigned = []
-    for filename in all_files:
-        # Strip the event_id prefix for comparison
-        stripped_filename = filename.replace(event_prefix, "", 1)
-        
-        # Check if either the full filename OR the stripped filename is in the database
-        is_assigned = (filename in assigned_filenames) or (stripped_filename in assigned_filenames)
-        
-        # Also check if any DB filename ends with the stripped name (handles timestamp prefixes)
-        for db_filename in assigned_filenames:
-            if db_filename.endswith(stripped_filename):
-                is_assigned = True
-                break
-        
-        if not is_assigned:
-            file_path = upload_dir / filename
-            try:
-                file_size = file_path.stat().st_size
-            except:
-                file_size = 0
-            
+    for file_path in all_files:
+        filename = file_path.name
+        stripped_name = filename.replace(event_prefix, "", 1)
+
+        if stripped_name not in assigned_filenames:
             unassigned.append({
-                "filename": filename,  # Keep full filename with prefix for backend
-                "display_name": stripped_filename,  # Show without prefix to user
+                "filename": filename,
+                "display_name": filename,
                 "path": str(file_path),
                 "assigned": False,
-                "size": file_size
+                "size": file_path.stat().st_size
             })
-    
+
     return unassigned
 
 
@@ -497,6 +464,73 @@ async def create_upload(
         "session_time": session_time,
     }
 
+@router.post("/uploads/bulk")
+async def bulk_upload_files(
+    event_id: int = Form(...),
+    session_id: int = Form(...),
+    speaker_id: int = Form(...),
+    room_id: Optional[int] = Form(None),
+    session_date: Optional[str] = Form(None),
+    session_time: Optional[str] = Form(None),
+    files: List[UploadFile] = File(...),
+    has_video: bool = Form(False),
+    has_audio: bool = Form(False),
+    needs_internet: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    """
+    Bulk upload multiple files for a given event/session/speaker.
+    Filenames are saved as eventId_sessionId_originalFilename
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    uploaded_files = []
+
+    for file in files:
+        if not file.filename:
+            continue
+
+        # Build a safe filename with event and session IDs
+        safe_filename = f"{event_id}_{session_id}_{file.filename}"
+        file_path = UPLOAD_DIR / safe_filename
+
+        # Save the file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Get file size
+        size_bytes = file_path.stat().st_size
+
+        # Store in DB
+        upload_record = Upload(
+            event_id=event_id,
+            speaker_id=speaker_id,
+            room_id=room_id,
+            session_date=datetime.strptime(session_date, "%Y-%m-%d").date() if session_date else None,
+            session_time=datetime.strptime(session_time, "%H:%M").time() if session_time else None,
+            filename=safe_filename,
+            size_bytes=size_bytes,
+            uploaded=True,
+            has_video=has_video,
+            has_audio=has_audio,
+            needs_internet=needs_internet,
+        )
+
+        db.add(upload_record)
+        uploaded_files.append(safe_filename)
+
+    db.commit()
+
+    logger.info(f"Uploaded {len(uploaded_files)} files for event {event_id}, session {session_id}")
+
+    return {
+        "status": "ok",
+        "files_uploaded": len(uploaded_files),
+        "uploaded_files": uploaded_files,
+        "event_id": event_id,
+        "session_id": session_id,
+    }
 
 
 @router.delete("/uploads/{upload_id}")
@@ -549,3 +583,5 @@ def download_upload(event_id: int, upload_id: int, db: Session = Depends(get_db)
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+    
+    

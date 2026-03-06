@@ -105,27 +105,27 @@ export default function FileAssignmentPage() {
   };
 
   const assignFile = async (filename: string) => {
-    const assignment = assignments[filename];
+  const assignment = assignments[filename];
 
-    if (!assignment?.sessionId) {
-      alert("Please select a session");
-      return;
-    }
+  if (!assignment?.sessionId) {
+    alert("Please select a session");
+    return;
+  }
 
-    try {
-      // Move file from uploads folder to session
-      await apiPost(`/api/files/${assignment.sessionId}/assign-file`, {
-        filename: filename,
-        event_id: eventId,
-      });
+  try {
+    await apiPost(`/api/files/${assignment.sessionId}/assign-file`, {
+      filename: filename,
+      event_id: eventId,
+    });
 
-      alert("File assigned successfully!");
-      await loadData();
-    } catch (err) {
-      console.error("Failed to assign file:", err);
-      alert("Failed to assign file");
-    }
-  };
+    // Remove the file from the state so it disappears
+    setUploadedFiles((prev) => prev.filter((f) => f.filename !== filename));
+    alert("File assigned successfully!");
+  } catch (err) {
+    console.error("Failed to assign file:", err);
+    alert("Failed to assign file");
+  }
+};
 
   const getSessionsForSpeaker = (speakerId: number) => {
     return sessions.filter((s) => s.speaker_id === speakerId);

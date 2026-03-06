@@ -74,6 +74,12 @@ export default function EventDashboardPage() {
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
   const router = useRouter();
+  const API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const unassignedPresentations =
+    stats?.presentations_by_room?.["Unassigned"] ||
+    stats?.presentations.filter((p) => !p.room_id) ||
+    [];
 
   useEffect(() => {
     if (eventId) {
@@ -336,23 +342,35 @@ export default function EventDashboardPage() {
 
       {activeTab === 3 && (
         <div className="space-y-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Total Presentations */}
-            <div className="modern-card border border-gray-200 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-2">
-                Total Presentations
-              </h3>
-              {stats?.presentations_by_room &&
-                Object.entries(stats.presentations_by_room).map(
+          {/* Prepare presentations by room */}
+          {(() => {
+            const presentationsByRoom: Record<string, Presentation[]> = {};
+            let unassignedCount = 0;
+
+            stats?.presentations.forEach((p) => {
+              const roomName = p.room_name || "Unassigned";
+              if (!presentationsByRoom[roomName])
+                presentationsByRoom[roomName] = [];
+              presentationsByRoom[roomName].push(p);
+
+              if (!p.room_id) unassignedCount++;
+            });
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Room-wise presentations */}
+                {Object.entries(presentationsByRoom).map(
                   ([roomName, presentations]) => (
-                    <div key={roomName} className="mb-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-4xl font-bold text-blue-600">
+                    <div
+                      key={roomName}
+                      className="modern-card border border-gray-200 rounded-xl p-6"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-2xl font-bold text-blue-600">
                           {roomName}
                         </h4>
 
-                        {/* Assign Files button for Unassigned */}
+                        {/* Show Assign Files button only for Unassigned */}
                         {roomName === "Unassigned" &&
                           presentations.length > 0 && (
                             <button
@@ -363,7 +381,7 @@ export default function EventDashboardPage() {
                               }
                               className="ml-3 px-3 py-1 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
                             >
-                              Assign Files
+                              Assign Files ({presentations.length})
                             </button>
                           )}
                       </div>
@@ -378,13 +396,14 @@ export default function EventDashboardPage() {
                             <button
                               onClick={async () => {
                                 const response = await fetch(
-                                  `/api/files/events/${eventId}/download/${p.id}`,
+                                  `${API_BASE_URL}/api/files/events/${eventId}/download/${p.id}`,
                                 );
 
                                 if (!response.ok) {
                                   alert("Failed to download file");
                                   return;
                                 }
+
                                 const blob = await response.blob();
                                 const url = window.URL.createObjectURL(blob);
                                 const a = document.createElement("a");
@@ -405,37 +424,11 @@ export default function EventDashboardPage() {
                     </div>
                   ),
                 )}
-            </div>
+              </div>
+            );
+          })()}
 
-            {/* Presentations by Room */}
-            <div className="modern-card border border-gray-200 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">
-                Presentations by Room
-              </h3>
-              {stats?.presentations_by_room &&
-              Object.keys(stats.presentations_by_room).length > 0 ? (
-                <ul className="space-y-2">
-                  {Object.entries(stats.presentations_by_room).map(
-                    ([roomName, presentations]) => (
-                      <li
-                        key={roomName}
-                        className="flex justify-between text-sm"
-                      >
-                        <span className="text-gray-700">{roomName}</span>
-                        <span className="font-semibold text-gray-900">
-                          {presentations.length}
-                        </span>
-                      </li>
-                    ),
-                  )}
-                </ul>
-              ) : (
-                <p className="text-gray-500 text-sm">No presentations yet</p>
-              )}
-            </div>
-          </div>
-
-          {/* Room Status */}
+          {/* Room Status Cards */}
           <div className="modern-card border border-gray-200 rounded-xl p-6">
             <h3 className="text-lg font-semibold mb-4">Room PC Status</h3>
             {roomStatuses.length === 0 ? (

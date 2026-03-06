@@ -149,6 +149,10 @@ export async function apiPost<TRequest, TResponse = unknown>(
   config?: AxiosRequestConfig,
 ): Promise<TResponse> {
   const token = getAuthToken();
+
+  console.log("API POST PATH:", path);
+  console.log("API BASE URL:", client.defaults.baseURL);
+
   const headers = {
     ...(data instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
