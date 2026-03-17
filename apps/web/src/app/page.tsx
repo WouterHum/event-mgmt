@@ -13,7 +13,7 @@ const HomePage = () => {
           <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6">
             Welcome to{" "}
             <span className="bg-gradient-to-r from-indigo-500 to-pink-500 bg-clip-text text-transparent">
-              EventHub
+              VenueLink
             </span>
           </h1>
           <p className="text-lg md:text-xl text-gray-600 mb-12">

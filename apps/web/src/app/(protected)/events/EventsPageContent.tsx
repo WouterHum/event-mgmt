@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { validateFields } from "@/lib/validation";
 import { Event } from "@/types";
+import { useAtom } from "jotai";
+import { selectedEventAtom } from "@/app/components/NavBar";
 
 interface EventFormFields {
   title: string;
@@ -19,6 +21,7 @@ export default function EventsPageContent() {
   const [events, setEvents] = useState<Event[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Event | null>(null);
+  const [, setSelectedEvent] = useAtom(selectedEventAtom);
   const [form, setForm] = useState<EventFormFields>({
     title: "",
     description: "",
@@ -41,21 +44,19 @@ export default function EventsPageContent() {
 
   useEffect(() => {
     load();
+    // FIX #8: Clear selected event when on events page
+    setSelectedEvent(null);
   }, []);
 
   const handleSave = async () => {
-    // validate before saving
     const errors = validateFields(form, ["title", "start_time", "end_time"]);
     const typedErrors: Partial<Record<keyof EventFormFields, string>> = {};
     Object.keys(errors).forEach((key) => {
       if (key in form)
-        typedErrors[key as keyof EventFormFields] = errors[
-          key as keyof typeof errors
-        ] as string;
+        typedErrors[key as keyof EventFormFields] = errors[key as keyof typeof errors] as string;
     });
     setFieldErrors(typedErrors);
-
-    if (Object.keys(typedErrors).length > 0) return; // stop save if errors
+    if (Object.keys(typedErrors).length > 0) return;
 
     try {
       if (editing && editing.id) {
@@ -66,13 +67,7 @@ export default function EventsPageContent() {
       await load();
       setOpen(false);
       setEditing(null);
-      setForm({
-        title: "",
-        description: "",
-        start_time: "",
-        end_time: "",
-        location: "",
-      });
+      setForm({ title: "", description: "", start_time: "", end_time: "", location: "" });
       setFieldErrors({});
     } catch (err) {
       console.error("Failed to save event:", err);
@@ -102,225 +97,151 @@ export default function EventsPageContent() {
     }
   };
 
-  const navigateToSpeakers = (eventId: number) => {
-    window.location.href = `/speakers-management?eventId=${eventId}`;
-  };
-
-  const navigateToManage = (eventId: number) => {
-    window.location.href = `/event-dashboard?eventId=${eventId}`;
+  // FIX #8: Select event and navigate, activating event-scoped nav tabs
+  const handleSelectEvent = (event: Event) => {
+    setSelectedEvent({ id: event.id!, title: event.title });
+    router.push(`/speakers-management?eventId=${event.id}`);
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-12">
-      <div className="max-w-4xl mx-auto px-4">
-        <header className="mb-10 text-center">
-          <h1 className="text-4xl font-bold mb-2">Events</h1>
-          <p className="text-muted-foreground">
-            Create and manage conference events
-          </p>
-        </header>
-
-        {/* Action Buttons */}
-        <div className="flex gap-3 mb-8 justify-center">
-          <button
-            onClick={() => {
-              setEditing(null);
-              setForm({
-                title: "",
-                description: "",
-                start_time: "",
-                end_time: "",
-                location: "",
-              });
-              setFieldErrors({});
-              setOpen(true);
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium shadow-sm hover:bg-primary/90 transition-all"
-          >
-            + Add Event
-          </button>
-        </div>
-
-        {/* Events List */}
-        <div className="bg-card border border-gray-200 rounded-2xl shadow-sm divide-y divide-gray-200">
-          {events.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No events found.
-            </p>
-          ) : (
-            events.map((e) => (
-              <div
-                key={e.id}
-                className="px-6 py-4 hover:bg-muted transition-all"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-base font-semibold">{e.title}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {e.start_time
-                        ? `${e.start_time} @ ${e.location || "TBA"}`
-                        : e.location || "No location"}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleEdit(e)}
-                      className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-foreground bg-card hover:bg-muted transition-all"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => remove(e.id)}
-                      className="rounded-md border border-red-300 text-red-600 px-3 py-1.5 text-sm bg-red-50 hover:bg-red-100 transition-all"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                {/* Speaker & Session Management Buttons */}
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() => navigateToSpeakers(e.id!)}
-                    className="inline-flex items-center justify-center rounded-md bg-blue-500 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-blue-600 transition-all"
-                  >
-                    📊 Manage Speakers & Sessions
-                  </button>
-                  <button
-                    onClick={() => navigateToManage(e.id!)}
-                    className="inline-flex items-center justify-center rounded-md bg-purple-500 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-purple-600 transition-all"
-                  >
-                    ⚙️ Event Dashboard
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+    <div className="page-container">
+      <div className="page-header">
+        <h1 className="page-title">Events</h1>
+        <p className="page-subtitle">Select an event to manage its speakers, rooms and uploads</p>
       </div>
 
-      {/* Modal */}
+      <div className="my-6 flex justify-end">
+        <button
+          onClick={() => {
+            setEditing(null);
+            setForm({ title: "", description: "", start_time: "", end_time: "", location: "" });
+            setFieldErrors({});
+            setOpen(true);
+          }}
+          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-medium hover:from-blue-600 hover:to-purple-600 transition-all shadow-sm"
+        >
+          + Create Event
+        </button>
+      </div>
+
+      <div className="modern-card border border-gray-200 rounded-xl">
+        {events.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No events yet. Create one to get started.</p>
+        ) : (
+          <ul>
+            {events.map((event, idx) => (
+              <li
+                key={event.id}
+                className={`flex justify-between items-center py-4 px-6 hover:bg-gray-50 transition ${
+                  idx !== events.length - 1 ? "border-b border-gray-200" : ""
+                }`}
+              >
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-800 text-lg">{event.title}</p>
+                  {event.location && (
+                    <p className="text-sm text-gray-500">📍 {event.location}</p>
+                  )}
+                  {event.start_time && (
+                    <p className="text-sm text-gray-500">
+                      🗓 {new Date(event.start_time).toLocaleDateString()} —{" "}
+                      {event.end_time ? new Date(event.end_time).toLocaleDateString() : ""}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  {/* FIX #8: Clicking the event name sets the selected event */}
+                  <button
+                    onClick={() => handleSelectEvent(event)}
+                    className="px-4 py-2 rounded-lg font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 transition"
+                  >
+                    Open Event →
+                  </button>
+                  <button
+                    onClick={() => handleEdit(event)}
+                    className="px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 transition"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => remove(event.id)}
+                    className="px-4 py-2 rounded-lg font-semibold bg-red-100 text-red-700 hover:bg-red-200 border border-red-200 transition"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Add/Edit Event Dialog */}
       {open && (
-        <div className="fixed inset-0 bg-white/10 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg mx-4">
-            <div className="border-b border-gray-200 px-6 py-4">
-              <h2 className="text-lg font-semibold">
-                {editing ? "Edit Event" : "Add Event"}
-              </h2>
-            </div>
-            <div className="p-6 space-y-4">
-              {/** Title Field */}
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg mx-4 p-6">
+            <h2 className="text-xl font-semibold border-b border-gray-200 pb-3 mb-4">
+              {editing ? "Edit Event" : "Create Event"}
+            </h2>
+
+            <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Title</label>
                 <input
                   type="text"
+                  placeholder="Event Title *"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                    fieldErrors.title
-                      ? "border-red-500 focus:ring-red-300"
-                      : "border-gray-300 focus:ring-primary/40"
-                  }`}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {fieldErrors.title && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {fieldErrors.title}
-                  </p>
-                )}
+                {fieldErrors.title && <p className="text-red-500 text-xs mt-1">{fieldErrors.title}</p>}
               </div>
-
-              {/** Description Field */}
+              <textarea
+                placeholder="Description"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={3}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-
-              {/** Start/End Fields */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Start
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={form.start_time}
-                    onChange={(e) =>
-                      setForm({ ...form, start_time: e.target.value })
-                    }
-                    className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                      fieldErrors.start_time
-                        ? "border-red-500 focus:ring-red-300"
-                        : "border-gray-300 focus:ring-primary/40"
-                    }`}
-                  />
-                  {fieldErrors.start_time && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {fieldErrors.start_time}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">End</label>
-                  <input
-                    type="datetime-local"
-                    value={form.end_time}
-                    onChange={(e) =>
-                      setForm({ ...form, end_time: e.target.value })
-                    }
-                    className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                      fieldErrors.end_time
-                        ? "border-red-500 focus:ring-red-300"
-                        : "border-gray-300 focus:ring-primary/40"
-                    }`}
-                  />
-                  {fieldErrors.end_time && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {fieldErrors.end_time}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/** Location Field */}
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Location
-                </label>
+                <label className="block text-sm text-gray-600 mb-1">Start Date/Time *</label>
                 <input
-                  type="text"
-                  value={form.location}
-                  onChange={(e) =>
-                    setForm({ ...form, location: e.target.value })
-                  }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  type="datetime-local"
+                  value={form.start_time}
+                  onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {fieldErrors.start_time && <p className="text-red-500 text-xs mt-1">{fieldErrors.start_time}</p>}
               </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">End Date/Time *</label>
+                <input
+                  type="datetime-local"
+                  value={form.end_time}
+                  onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {fieldErrors.end_time && <p className="text-red-500 text-xs mt-1">{fieldErrors.end_time}</p>}
+              </div>
+              <input
+                type="text"
+                placeholder="Location"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
 
-            <div className="border-t border-gray-200 px-6 py-4 flex justify-end gap-2">
+            <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-200">
               <button
-                onClick={() => {
-                  setOpen(false);
-                  setEditing(null);
-                  setFieldErrors({});
-                }}
-                className="px-4 py-2 rounded-md border border-gray-300 text-sm text-foreground bg-card hover:bg-muted transition-all"
+                onClick={() => { setOpen(false); setEditing(null); }}
+                className="px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-100 transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-all"
+                className="px-4 py-2 rounded-md text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition shadow-sm"
               >
-                Save
+                {editing ? "Save Changes" : "Create Event"}
               </button>
             </div>
           </div>

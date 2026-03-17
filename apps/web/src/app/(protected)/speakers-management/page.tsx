@@ -18,12 +18,15 @@ interface Event {
   end_time?: string;
 }
 
+// FIX #7: Speaker includes session/upload counts from API
 interface Speaker {
   id?: number;
   name: string;
   email: string;
   bio: string;
   event_id: number;
+  session_count?: number;    // FIX #7
+  uploads_loaded?: number;   // FIX #7
 }
 
 export default function SpeakersManagementPage() {
@@ -42,28 +45,20 @@ export default function SpeakersManagementPage() {
     bio: "",
     event_id: Number(eventId),
   });
-  const [errors, setErrors] = useState<Partial<Record<keyof Speaker, string>>>(
-    {},
-  );
+  const [errors, setErrors] = useState<Partial<Record<keyof Speaker, string>>>({});
   const [bulkSpeakers, setBulkSpeakers] = useState<Speaker[]>([]);
   const [showBulkDialog, setShowBulkDialog] = useState(false);
 
   useEffect(() => {
-    if (eventId) {
-      loadData();
-    }
+    if (eventId) loadData();
   }, [eventId]);
 
   useEffect(() => {
-    // Client-side search (case-insensitive)
     if (searchQuery.trim() === "") {
       setFilteredSpeakers(speakers);
     } else {
       const query = searchQuery.toLowerCase();
-      const filtered = speakers.filter((s) =>
-        s.name.toLowerCase().includes(query),
-      );
-      setFilteredSpeakers(filtered);
+      setFilteredSpeakers(speakers.filter((s) => s.name.toLowerCase().includes(query)));
     }
   }, [searchQuery, speakers]);
 
@@ -72,6 +67,7 @@ export default function SpeakersManagementPage() {
       setLoading(true);
       const [eventData, speakersData] = await Promise.all([
         apiGet<Event>(`/api/events/${eventId}`),
+        // FIX #1 + #7: Get speakers for THIS event only, with counts
         apiGet<Speaker[]>(`/api/events/${eventId}/speakers`),
       ]);
       setEvent(eventData);
@@ -84,35 +80,29 @@ export default function SpeakersManagementPage() {
     }
   };
 
-  // 1️⃣ Update validateSpeaker signature
   const validateSpeaker = (speaker: Partial<Speaker>) => {
     const errors: Partial<Record<keyof Speaker, string>> = {};
-
     if (!speaker.name || speaker.name.trim() === "") {
       errors.name = "Name is required";
     }
-
     if (speaker.email && !/^\S+@\S+\.\S+$/.test(speaker.email)) {
       errors.email = "Invalid email";
     }
-
     return errors;
   };
 
   const saveSpeaker = async () => {
+    const fieldErrors = validateSpeaker(form);
+    setErrors(fieldErrors);
+    if (Object.keys(fieldErrors).length > 0) return;
+
     try {
-      const fieldErrors = validateSpeaker(form);
-      setErrors(fieldErrors);
-
-      if (Object.keys(fieldErrors).length > 0) return;
-
       await apiPost("/api/speakers/", {
         name: form.name,
         email: form.email,
         bio: form.bio,
-        event_id: Number(eventId), // Send event_id to link in junction table
+        event_id: Number(eventId),
       });
-
       await loadData();
       setOpen(false);
       setForm({ name: "", email: "", bio: "", event_id: Number(eventId) });
@@ -136,7 +126,6 @@ export default function SpeakersManagementPage() {
   const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
@@ -148,27 +137,20 @@ export default function SpeakersManagementPage() {
   const parseCSV = (csvText: string) => {
     const lines = csvText.split("\n").filter((l) => l.trim() !== "");
     const newSpeakers: Speaker[] = [];
-
-    // Assuming first line is header: Name, Email, Bio
     for (let i = 1; i < lines.length; i++) {
       const [name, email, bio] = lines[i].split(",").map((v) => v.trim());
-      if (!name) continue; // Skip rows without name
+      if (!name) continue;
       newSpeakers.push({ name, email, bio, event_id: Number(eventId) });
     }
-
-    if (newSpeakers.length === 0) {
-      alert("No valid speakers found in the file.");
-      return;
-    }
-
+    if (newSpeakers.length === 0) { alert("No valid speakers found in the file."); return; }
     setBulkSpeakers(newSpeakers);
-    setShowBulkDialog(true); // Show preview dialog
+    setShowBulkDialog(true);
   };
 
-  const saveBulkSpeakers = async (speakersList: Speaker[]) => {
+  const saveBulkSpeakers = async () => {
     try {
       await apiPost("/api/speakers/bulk", bulkSpeakers);
-      alert(`${speakersList.length} speakers added successfully!`);
+      alert(`${bulkSpeakers.length} speakers added successfully!`);
       await loadData();
     } catch (err) {
       console.error("Failed to save bulk speakers:", err);
@@ -177,16 +159,9 @@ export default function SpeakersManagementPage() {
   };
 
   const downloadSampleCSV = () => {
-    const csvContent = `Name,Email,Bio
-Alice Johnson,alice@example.com,Expert in AI and Machine Learning
-Bob Smith,bob.smith@example.com,Cloud Computing Specialist
-Charlie Davis,charlie.d@example.com,Full-stack Developer and Speaker
-Diana Lee,diana.lee@example.com,Entrepreneur & Tech Innovator
-Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
-
+    const csvContent = `Name,Email,Bio\nAlice Johnson,alice@example.com,Expert in AI\nBob Smith,bob@example.com,Cloud Specialist`;
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute("download", "speakers_sample.csv");
@@ -194,6 +169,7 @@ Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
     link.click();
     document.body.removeChild(link);
   };
+
   if (loading) {
     return (
       <div className="page-container">
@@ -208,10 +184,7 @@ Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
     <div className="page-container">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-2">
-          <a
-            href="/events"
-            className="text-blue-600 hover:text-blue-800 font-medium"
-          >
+          <a href="/events" className="text-blue-600 hover:text-blue-800 font-medium">
             ← Back to Events
           </a>
         </div>
@@ -223,7 +196,6 @@ Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
         )}
       </div>
 
-      {/* Search and Add Section */}
       <div className="my-6 flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
           <input
@@ -248,23 +220,16 @@ Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
             className="hidden"
             onChange={handleBulkUpload}
           />
-          {/* Download Sample CSV */}
           <button
-            type="button"
             onClick={downloadSampleCSV}
             className="px-4 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
           >
-            Download Sample CSV
+            Sample CSV
           </button>
         </div>
         <button
           onClick={() => {
-            setForm({
-              name: "",
-              email: "",
-              bio: "",
-              event_id: Number(eventId),
-            });
+            setForm({ name: "", email: "", bio: "", event_id: Number(eventId) });
             setErrors({});
             setOpen(true);
           }}
@@ -274,13 +239,20 @@ Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
         </button>
       </div>
 
-      {/* Speakers List */}
+      {/* FIX #7: Summary */}
+      {speakers.length > 0 && (
+        <div className="mb-4 px-2 text-sm text-gray-500">
+          {speakers.length} speaker{speakers.length !== 1 ? "s" : ""} •{" "}
+          {speakers.reduce((sum, s) => sum + (s.session_count ?? 0), 0)} sessions •{" "}
+          {speakers.reduce((sum, s) => sum + (s.uploads_loaded ?? 0), 0)}/
+          {speakers.reduce((sum, s) => sum + (s.session_count ?? 0), 0)} presentations loaded
+        </div>
+      )}
+
       <div className="modern-card border border-gray-200 rounded-xl">
         {filteredSpeakers.length === 0 ? (
           <p className="text-gray-500 text-center py-8">
-            {searchQuery
-              ? "No speakers found matching your search"
-              : "No speakers added yet"}
+            {searchQuery ? "No speakers found matching your search" : "No speakers added yet"}
           </p>
         ) : (
           <ul>
@@ -288,23 +260,27 @@ Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
               <li
                 key={speaker.id}
                 className={`flex justify-between items-center py-4 px-6 hover:bg-gray-50 transition ${
-                  idx !== filteredSpeakers.length - 1
-                    ? "border-b border-gray-200"
-                    : ""
+                  idx !== filteredSpeakers.length - 1 ? "border-b border-gray-200" : ""
                 }`}
               >
                 <div className="flex-1">
-                  <p className="font-semibold text-gray-800 text-lg">
-                    {speaker.name}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    <a
-                      href={`/speaker-sessions?speakerId=${speaker.id}&eventId=${eventId}`}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      Manage sessions →
-                    </a>
-                  </p>
+                  <p className="font-semibold text-gray-800 text-lg">{speaker.name}</p>
+                  {speaker.email && (
+                    <p className="text-sm text-gray-400">{speaker.email}</p>
+                  )}
+                  {/* FIX #7: Show sessions and presentations loaded */}
+                  <div className="flex gap-3 mt-1">
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                      {speaker.session_count ?? 0} session{(speaker.session_count ?? 0) !== 1 ? "s" : ""}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded ${
+                      (speaker.uploads_loaded ?? 0) === (speaker.session_count ?? 0) && (speaker.session_count ?? 0) > 0
+                        ? "bg-green-100 text-green-700"
+                        : "bg-orange-100 text-orange-700"
+                    }`}>
+                      {speaker.uploads_loaded ?? 0}/{speaker.session_count ?? 0} presentations loaded
+                    </span>
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <a
@@ -329,97 +305,46 @@ Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
       {/* Add Speaker Dialog */}
       <Dialog
         open={open}
-        onClose={() => {
-          setOpen(false);
-          setForm({ name: "", email: "", bio: "", event_id: Number(eventId) });
-          setErrors({});
-        }}
-        fullWidth
-        maxWidth="sm"
-        slotProps={{
-          backdrop: {
-            className: "backdrop-blur-sm bg-black/30",
-          },
-        }}
-        PaperProps={{
-          className:
-            "bg-white rounded-2xl shadow-2xl border border-gray-200 !m-4",
-        }}
+        onClose={() => { setOpen(false); setForm({ name: "", email: "", bio: "", event_id: Number(eventId) }); setErrors({}); }}
+        fullWidth maxWidth="sm"
+        PaperProps={{ className: "bg-white rounded-2xl shadow-2xl border border-gray-200 !m-4" }}
       >
-        <DialogTitle className="font-semibold text-xl border-b border-gray-200 py-3">
-          Add Speaker
-        </DialogTitle>
-
+        <DialogTitle className="font-semibold text-xl border-b border-gray-200 py-3">Add Speaker</DialogTitle>
         <DialogContent className="space-y-4 py-5">
           <TextField
-            fullWidth
-            label="Name"
+            fullWidth label="Name"
             value={form.name}
-            onChange={(e) => {
-              const name = e.target.value;
-              setForm({ ...form, name });
-              setErrors(validateSpeaker({ ...form, name }));
-            }}
-            error={!!errors.name}
-            helperText={errors.name}
+            onChange={(e) => { const name = e.target.value; setForm({ ...form, name }); setErrors(validateSpeaker({ ...form, name })); }}
+            error={!!errors.name} helperText={errors.name}
           />
           <TextField
-            fullWidth
-            label="Email"
+            fullWidth label="Email"
             value={form.email}
-            onChange={(e) => {
-              const email = e.target.value;
-              setForm({ ...form, email });
-              setErrors(validateSpeaker({ ...form, email }));
-            }}
-            error={!!errors.email}
-            helperText={errors.email}
+            onChange={(e) => { const email = e.target.value; setForm({ ...form, email }); setErrors(validateSpeaker({ ...form, email })); }}
+            error={!!errors.email} helperText={errors.email}
           />
           <TextField
-            fullWidth
-            label="Bio"
-            multiline
-            minRows={3}
+            fullWidth label="Bio" multiline minRows={3}
             value={form.bio}
             onChange={(e) => setForm({ ...form, bio: e.target.value })}
           />
         </DialogContent>
-
         <DialogActions className="flex justify-end gap-3 p-4 border-t border-gray-200">
           <button
-            onClick={() => {
-              setOpen(false);
-              setForm({
-                name: "",
-                email: "",
-                bio: "",
-                event_id: Number(eventId),
-              });
-              setErrors({});
-            }}
-            className="px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-100 transition-all"
-          >
-            Cancel
-          </button>
+            onClick={() => { setOpen(false); setForm({ name: "", email: "", bio: "", event_id: Number(eventId) }); setErrors({}); }}
+            className="px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-100 transition"
+          >Cancel</button>
           <button
             onClick={saveSpeaker}
-            className="px-4 py-2 rounded-md text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all shadow-sm"
-          >
-            Add Speaker
-          </button>
+            className="px-4 py-2 rounded-md text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition shadow-sm"
+          >Add Speaker</button>
         </DialogActions>
       </Dialog>
-      <Dialog
-        open={showBulkDialog}
-        onClose={() => setShowBulkDialog(false)}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle className="font-semibold text-xl border-b border-gray-200 py-3">
-          Preview Bulk Speakers
-        </DialogTitle>
 
-        <DialogContent className="py-5 space-y-4 max-h-96 overflow-y-auto">
+      {/* Bulk Preview Dialog */}
+      <Dialog open={showBulkDialog} onClose={() => setShowBulkDialog(false)} fullWidth maxWidth="md">
+        <DialogTitle className="font-semibold text-xl border-b border-gray-200 py-3">Preview Bulk Speakers</DialogTitle>
+        <DialogContent className="py-5 max-h-96 overflow-y-auto">
           <table className="w-full table-auto border border-gray-300">
             <thead>
               <tr className="bg-gray-100">
@@ -434,31 +359,19 @@ Edward Kim,edward.k@example.com,Blockchain & Fintech Consultant`;
                 <tr key={idx} className="hover:bg-gray-50">
                   <td className="border px-2 py-1 text-center">{idx + 1}</td>
                   <td className="border px-2 py-1">{s.name}</td>
-                  <td className="border px-2 py-1">{s.email || "-"}</td>
-                  <td className="border px-2 py-1">{s.bio || "-"}</td>
+                  <td className="border px-2 py-1">{s.email || "—"}</td>
+                  <td className="border px-2 py-1">{s.bio || "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </DialogContent>
-
         <DialogActions className="flex justify-end gap-3 p-4 border-t border-gray-200">
+          <button onClick={() => setShowBulkDialog(false)} className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 transition">Cancel</button>
           <button
-            onClick={() => setShowBulkDialog(false)}
-            className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 transition"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              await saveBulkSpeakers(bulkSpeakers);
-              setShowBulkDialog(false);
-              setBulkSpeakers([]);
-            }}
+            onClick={async () => { await saveBulkSpeakers(); setShowBulkDialog(false); setBulkSpeakers([]); }}
             className="px-4 py-2 rounded-md bg-green-500 text-white hover:bg-green-600 transition"
-          >
-            Confirm Upload
-          </button>
+          >Confirm Upload</button>
         </DialogActions>
       </Dialog>
     </div>

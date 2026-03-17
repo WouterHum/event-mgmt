@@ -13,9 +13,11 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Checkbox,
+  Radio,
+  RadioGroup,
   FormControlLabel,
-  FormGroup,
+  FormLabel,
+  Checkbox,
 } from "@mui/material";
 
 interface Event {
@@ -28,38 +30,38 @@ interface Event {
 interface Speaker {
   id: number;
   name: string;
-  event_id: number;
 }
 
 interface Room {
   id: number;
   name: string;
-  event_id: number;
 }
 
-interface TechNotes {
-  own_pc: boolean;
-  video: boolean;
-  audio: boolean;
-  no_ppt: boolean;
-}
+// FIX #5: Video/Audio are mutually exclusive — use a single field
+type MediaOption =
+  | "none"
+  | "video_with_audio"
+  | "video_without_audio"
+  | "audio_only";
 
 interface Session {
-  id?: number; // Optional when creating
+  id?: number;
   event_id: number;
   speaker_id: number;
   room_id: number;
   session_date?: string;
-  session_time?: string;
-  tech_notes?: TechNotes;
+  session_time?: string; // FIX #6: start time
+  session_time_end?: string; // FIX #6: end time
+  // FIX #5: single selection for media
+  media_option: MediaOption;
+  // FIX #4: own_machine and no_ppt are independent checkboxes
+  own_machine: boolean;
+  no_ppt: boolean;
   uploaded?: boolean;
-  upload_file_path?: string;
+  upload_file_path?: string | null;
   room_name?: string;
   event_name?: string;
-}
-
-interface SessionResponse extends Omit<Session, "id"> {
-  id: number; // Required in response
+  speaker_name?: string;
 }
 
 export default function SpeakerSessionsPage() {
@@ -73,27 +75,25 @@ export default function SpeakerSessionsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<EditState>(null);
-  const [uploadingSession, setUploadingSession] = useState<number | null>(null);
-  const [attendeeId, setAttendeeId] = useState<number | null>(null);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [editing, setEditing] = useState<{ id?: number } | null>(null);
+  const [uploadingSessionId, setUploadingSessionId] = useState<number | null>(
+    null,
+  );
 
-  const [form, setForm] = useState<Session>({
+  const emptyForm = (): Session => ({
     event_id: eventId,
     speaker_id: speakerId,
     room_id: 0,
     session_date: "",
-    session_time: "",
-    tech_notes: {
-      no_ppt: false,
-      own_pc: false,
-      video: false,
-      audio: false,
-    },
+    session_time: "", // FIX #6: start time
+    session_time_end: "", // FIX #6: end time
+    media_option: "none", // FIX #5: default no media selected
+    own_machine: false, // FIX #4
+    no_ppt: false, // FIX #4
     uploaded: false,
   });
 
-  type EditState = { id?: number } | null;
+  const [form, setForm] = useState<Session>(emptyForm());
 
   useEffect(() => {
     loadData();
@@ -102,34 +102,58 @@ export default function SpeakerSessionsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-
       const [eventData, speakerData, sessionsData, roomsData] =
         await Promise.all([
           apiGet<Event>(`/api/events/${eventId}`),
           apiGet<Speaker>(`/api/speakers/${speakerId}`),
-          apiGet<Session[]>(`/api/speakers/${speakerId}/sessions`),
+          apiGet<Session[]>(
+            `/api/speakers/${speakerId}/sessions?event_id=${eventId}`,
+          ),
           apiGet<Room[]>(`/api/events/${eventId}/rooms`),
         ]);
 
-      // Map room names and ensure tech_notes are defined
-      const sessionsWithExtras = sessionsData.map((s) => ({
+      interface RawSession {
+        id?: number;
+        event_id: number;
+        speaker_id: number;
+        room_id: number;
+        session_date?: string;
+        session_time?: string;
+        upload_file_path?: string | null;
+        uploaded?: boolean;
+        tech_notes?: {
+          own_machine?: boolean;
+          video_with_audio?: boolean;
+          video_without_audio?: boolean;
+          audio_only?: boolean;
+          no_ppt?: boolean;
+        };
+      }
+
+      const enriched = sessionsData.map((s: RawSession) => ({
         ...s,
         room_name: roomsData.find((r) => r.id === s.room_id)?.name ?? "—",
         event_name: eventData.title,
-        tech_notes: s.tech_notes ?? {
-          own_pc: false,
-          video: false,
-          audio: false,
-          no_ppt: false,
-        },
-        session_date: s.session_date || "—",
-        session_time: s.session_time || "—",
+        // FIX #5: Map API tech_notes back to media_option
+        media_option: (s.tech_notes?.video_with_audio
+          ? "video_with_audio"
+          : s.tech_notes?.video_without_audio
+            ? "video_without_audio"
+            : s.tech_notes?.audio_only
+              ? "audio_only"
+              : "none") as MediaOption,
+        // FIX #4: own_machine and no_ppt separately
+        own_machine: s.tech_notes?.own_machine ?? false,
+        no_ppt: s.tech_notes?.no_ppt ?? false,
+        session_date: s.session_date || "",
+        session_time: s.session_time || "",
         uploaded: s.uploaded ?? false,
+        upload_file_path: s.upload_file_path ?? null,
       }));
 
       setEvent(eventData);
       setSpeaker(speakerData);
-      setSessions(sessionsWithExtras);
+      setSessions(enriched);
       setRooms(roomsData);
     } catch (err) {
       console.error("Failed to load data:", err);
@@ -140,48 +164,17 @@ export default function SpeakerSessionsPage() {
 
   const openAddSession = () => {
     setEditing(null);
-
-    // Combine date and time into a proper datetime
-    const sessionDate =
-      event?.start_time?.split("T")[0] ||
-      new Date().toISOString().split("T")[0];
-    const sessionDateTime = `${sessionDate}T09:00:00`;
-
     setForm({
-      event_id: eventId,
-      speaker_id: speakerId,
+      ...emptyForm(),
       room_id: rooms.length > 0 ? rooms[0].id : 0,
       session_date: event?.start_time?.split("T")[0] || "",
-      session_time: "09:00",
-      tech_notes: {
-        own_pc: false,
-        video: false,
-        audio: false,
-        no_ppt: false,
-      },
-      uploaded: false,
     });
     setOpen(true);
   };
 
   const openEditSession = (session: Session) => {
     setEditing({ id: session.id });
-
-    setForm({
-      event_id: session.event_id,
-      speaker_id: session.speaker_id,
-      room_id: session.room_id,
-      session_date: session.session_date ?? "",
-      session_time: session.session_time ?? "",
-      tech_notes: session.tech_notes ?? {
-        own_pc: false,
-        video: false,
-        audio: false,
-        no_ppt: false,
-      },
-      uploaded: session.uploaded ?? false,
-    });
-
+    setForm({ ...session });
     setOpen(true);
   };
 
@@ -190,54 +183,36 @@ export default function SpeakerSessionsPage() {
       alert("Please select a room");
       return;
     }
-
     if (!form.session_date || !form.session_time) {
-      alert("Please select date and time");
+      alert("Please select date and start time");
       return;
     }
 
-    const sessionData = {
-      event_id: Number(form.event_id),
-      speaker_id: Number(form.speaker_id),
-      room_id: Number(form.room_id),
+    const payload = {
+      event_id: form.event_id,
+      speaker_id: form.speaker_id,
+      room_id: form.room_id,
       session_date: form.session_date,
       session_time: form.session_time,
-      has_video: Boolean(form.tech_notes?.video ?? false),
-      has_audio: Boolean(form.tech_notes?.audio ?? false),
-      needs_internet: Boolean(form.tech_notes?.own_pc ?? false),
-      ...(attendeeId && { attendee_id: Number(attendeeId) }),
+      video_with_audio: form.media_option === "video_with_audio",
+      video_without_audio: form.media_option === "video_without_audio",
+      audio_only: form.media_option === "audio_only",
+      own_machine: form.own_machine,
+      no_ppt: form.no_ppt,
     };
 
+    console.log("[saveSession] payload:", payload);
+
     try {
-      let sessionId: number;
-
       if (editing?.id) {
-        await apiPut<typeof sessionData, SessionResponse>(
-          `/api/files/${editing.id}`,
-          sessionData,
+        await apiPut(
+          `/api/speakers/${speakerId}/sessions/${editing.id}`,
+          payload,
         );
-        sessionId = editing.id;
       } else {
-        const response = await apiPost<typeof sessionData, SessionResponse>(
-          "/api/files/",
-          sessionData,
-        );
-        sessionId = response.id;
+        // FIX #3: Create session without auto-creating a presentation
+        await apiPost(`/api/speakers/${speakerId}/sessions`, payload);
       }
-
-      // Upload files separately
-      if (selectedFiles.length > 0) {
-        const fileFormData = new FormData();
-        selectedFiles.forEach((file) => {
-          fileFormData.append("files", file);
-        });
-
-        await apiPost<FormData, void>(
-          `/api/files/${sessionId}/upload`,
-          fileFormData,
-        );
-      }
-
       setOpen(false);
       setEditing(null);
       loadData();
@@ -250,34 +225,46 @@ export default function SpeakerSessionsPage() {
   const deleteSession = async (id?: number) => {
     if (!id || !confirm("Delete this session?")) return;
     try {
-      await apiDelete(`/api/files/uploads/${id}`);
+      await apiDelete(`/api/speakers/${speakerId}/sessions/${id}`);
       await loadData();
     } catch (err) {
       console.error("Failed to delete session:", err);
     }
   };
 
+  // FIX #3: Upload presentation to an existing session
   const handleFileUpload = async (sessionId: number, file: File) => {
     try {
-      setUploadingSession(sessionId);
+      setUploadingSessionId(sessionId);
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch(`/api/files/uploads/${sessionId}/upload`, {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/speakers/${speakerId}/sessions/${sessionId}/upload`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("authToken") || ""}`,
+          },
+          body: formData,
+        },
+      );
 
       if (!response.ok) throw new Error("Upload failed");
-
       await loadData();
-      alert("File uploaded successfully!");
     } catch (err) {
       console.error("Failed to upload file:", err);
       alert("Failed to upload file");
     } finally {
-      setUploadingSession(null);
+      setUploadingSessionId(null);
     }
+  };
+
+  const mediaLabel: Record<MediaOption, string> = {
+    none: "—",
+    video_with_audio: "Video with Audio",
+    video_without_audio: "Video without Audio",
+    audio_only: "Audio Only",
   };
 
   if (loading) {
@@ -292,7 +279,6 @@ export default function SpeakerSessionsPage() {
 
   return (
     <div className="page-container">
-      {/* Header */}
       <div className="page-header">
         <a
           href={`/speakers-management?eventId=${eventId}`}
@@ -300,14 +286,12 @@ export default function SpeakerSessionsPage() {
         >
           ← Back to Speakers
         </a>
-
         <div>
           <h1 className="page-title">{speaker?.name}</h1>
           <p className="page-subtitle">{event?.title}</p>
         </div>
       </div>
 
-      {/* Add Session Button */}
       <div className="my-6">
         <button
           onClick={openAddSession}
@@ -317,7 +301,6 @@ export default function SpeakerSessionsPage() {
         </button>
       </div>
 
-      {/* Sessions List */}
       <div className="modern-card border border-gray-200 rounded-xl">
         {sessions.length === 0 ? (
           <p className="text-gray-500 text-center py-8">
@@ -332,8 +315,9 @@ export default function SpeakerSessionsPage() {
                     Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Time
+                    Time Start
                   </th>
+                  {/* FIX #6 */}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Room
                   </th>
@@ -341,7 +325,7 @@ export default function SpeakerSessionsPage() {
                     Tech Notes
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Uploaded
+                    Presentation
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Actions
@@ -351,69 +335,64 @@ export default function SpeakerSessionsPage() {
               <tbody className="divide-y divide-gray-200">
                 {sessions.map((session) => (
                   <tr key={session.id} className="hover:bg-gray-50">
-                    <td>
+                    <td className="px-6 py-4 text-sm text-gray-800">
                       {session.session_date
                         ? new Date(session.session_date).toLocaleDateString()
-                        : "-"}
+                        : "—"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                      {session.session_time}
+                    <td className="px-6 py-4 text-sm text-gray-800">
+                      {session.session_time || "—"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                    <td className="px-6 py-4 text-sm text-gray-800">
                       {session.room_name}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      <div className="flex gap-2 flex-wrap">
-                        {session.tech_notes?.own_pc && (
+                      <div className="flex gap-1 flex-wrap">
+                        {session.own_machine && (
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                            Own PC
+                            Own Machine
                           </span>
                         )}
-                        {session.tech_notes?.video && (
+                        {session.media_option !== "none" && (
                           <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs">
-                            Video
+                            {mediaLabel[session.media_option]}
                           </span>
                         )}
-                        {session.tech_notes?.audio && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
-                            Audio
-                          </span>
-                        )}
-                        {session.tech_notes?.no_ppt && (
+                        {session.no_ppt && (
                           <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs">
                             No PPT
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {session.uploaded ? (
+                    {/* FIX #3: Show upload button, or filename if already uploaded */}
+                    <td className="px-6 py-4">
+                      {session.uploaded && session.upload_file_path ? (
                         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold border border-green-200">
-                          Yes
+                          ✓ Uploaded
                         </span>
                       ) : (
                         <label className="cursor-pointer">
                           <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold border border-red-200 hover:bg-red-200 transition">
-                            {uploadingSession === session.id
+                            {uploadingSessionId === session.id
                               ? "Uploading..."
-                              : "Upload"}
+                              : "Upload File"}
                           </span>
                           <input
                             type="file"
                             className="hidden"
-                            accept=".ppt,.pptx,.pdf"
-                            disabled={uploadingSession === session.id}
+                            accept=".ppt,.pptx,.pdf,.key"
+                            disabled={uploadingSessionId === session.id}
                             onChange={(e) => {
                               const file = e.target.files?.[0];
-                              if (file && session.id) {
+                              if (file && session.id)
                                 handleFileUpload(session.id, file);
-                              }
                             }}
                           />
                         </label>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <td className="px-6 py-4 text-sm">
                       <div className="flex gap-2">
                         <button
                           onClick={() => openEditSession(session)}
@@ -445,12 +424,7 @@ export default function SpeakerSessionsPage() {
           setEditing(null);
         }}
         fullWidth
-        maxWidth="md"
-        slotProps={{
-          backdrop: {
-            className: "backdrop-blur-sm bg-black/30",
-          },
-        }}
+        maxWidth="sm"
         PaperProps={{
           className:
             "bg-white rounded-2xl shadow-2xl border border-gray-200 !m-4",
@@ -461,6 +435,7 @@ export default function SpeakerSessionsPage() {
         </DialogTitle>
 
         <DialogContent className="space-y-4 py-5">
+          {/* Room */}
           <FormControl fullWidth>
             <InputLabel>Room</InputLabel>
             <Select
@@ -478,6 +453,7 @@ export default function SpeakerSessionsPage() {
             </Select>
           </FormControl>
 
+          {/* Date */}
           <TextField
             fullWidth
             type="date"
@@ -487,95 +463,131 @@ export default function SpeakerSessionsPage() {
             InputLabelProps={{ shrink: true }}
           />
 
+          {/* FIX #6: Time Start */}
           <TextField
             fullWidth
             type="time"
-            label="Session Time"
+            label="Time Start"
             value={form.session_time}
             onChange={(e) => setForm({ ...form, session_time: e.target.value })}
             InputLabelProps={{ shrink: true }}
           />
 
-          <div className="border border-gray-300 rounded-lg p-4">
-            <p className="font-semibold text-gray-700 mb-3">Tech Notes</p>
-            <FormGroup>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={form.tech_notes?.own_pc ?? false}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        tech_notes: {
-                          own_pc: e.target.checked,
-                          video: form.tech_notes?.video ?? false,
-                          audio: form.tech_notes?.audio ?? false,
-                          no_ppt: form.tech_notes?.no_ppt ?? false,
-                        },
-                      })
-                    }
+          {/* FIX #6: Time Finish (optional) */}
+          <TextField
+            fullWidth
+            type="time"
+            label="Time Finish (optional)"
+            value={form.session_time_end || ""}
+            onChange={(e) =>
+              setForm({ ...form, session_time_end: e.target.value })
+            }
+            InputLabelProps={{ shrink: true }}
+          />
+
+          {/* FIX #3: Presentation upload in the dialog */}
+          {editing?.id && (
+            <div className="border border-gray-200 rounded-lg p-3">
+              <p className="font-semibold text-gray-700 mb-2 text-sm">
+                Presentation File
+              </p>
+              {sessions.find((s) => s.id === editing.id)?.uploaded ? (
+                <p className="text-green-600 text-sm">
+                  ✓ Presentation uploaded
+                </p>
+              ) : (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded text-sm border border-blue-200 hover:bg-blue-200 transition">
+                    {uploadingSessionId === editing.id
+                      ? "Uploading..."
+                      : "Choose Presentation File"}
+                  </span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".ppt,.pptx,.pdf,.key"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && editing.id)
+                        handleFileUpload(editing.id, file);
+                    }}
                   />
-                }
-                label="Own PC"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={form.tech_notes?.video ?? false}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        tech_notes: {
-                          own_pc: form.tech_notes?.own_pc ?? false,
-                          video: e.target.checked,
-                          audio: form.tech_notes?.audio ?? false,
-                          no_ppt: form.tech_notes?.no_ppt ?? false,
-                        },
-                      })
-                    }
-                  />
-                }
-                label="Video"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={form.tech_notes?.audio ?? false}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        tech_notes: {
-                          own_pc: form.tech_notes?.own_pc ?? false,
-                          video: form.tech_notes?.video ?? false,
-                          audio: e.target.checked,
-                          no_ppt: form.tech_notes?.no_ppt ?? false,
-                        },
-                      })
-                    }
-                  />
-                }
-                label="Audio"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={form.tech_notes?.no_ppt ?? false}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        tech_notes: {
-                          own_pc: form.tech_notes?.own_pc ?? false,
-                          video: form.tech_notes?.video ?? false,
-                          audio: form.tech_notes?.audio ?? false,
-                          no_ppt: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                }
-                label="No PPT"
-              />
-            </FormGroup>
+                  <span className="text-xs text-gray-400">
+                    .pptx, .ppt, .pdf, .key
+                  </span>
+                </label>
+              )}
+            </div>
+          )}
+
+          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+            <p className="font-semibold text-gray-700">Tech Notes</p>
+
+            {/* FIX #4: Own machine - independent, does NOT affect no_ppt */}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={form.own_machine}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setForm((prev) => ({ ...prev, own_machine: checked }));
+                  }}
+                />
+              }
+              label="Using own machine"
+            />
+
+            {/* FIX #4: No PPT - independent, does NOT affect own_machine */}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={form.no_ppt}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setForm((prev) => ({ ...prev, no_ppt: checked }));
+                  }}
+                />
+              }
+              label="No PPT"
+            />
+
+            {/* FIX #5: Video/Audio as mutually exclusive radio group */}
+            <div>
+              <FormLabel
+                component="legend"
+                className="text-sm text-gray-600 mb-1"
+              >
+                Media (select one or none)
+              </FormLabel>
+              <RadioGroup
+                value={form.media_option}
+                onChange={(e) => {
+                  const val = e.target.value as MediaOption;
+                  setForm((prev) => ({ ...prev, media_option: val }));
+                }}
+              >
+                <FormControlLabel
+                  value="none"
+                  control={<Radio size="small" />}
+                  label="None"
+                />
+                <FormControlLabel
+                  value="video_with_audio"
+                  control={<Radio size="small" />}
+                  label="Video with Audio"
+                />
+                <FormControlLabel
+                  value="video_without_audio"
+                  control={<Radio size="small" />}
+                  label="Video without Audio"
+                />
+                <FormControlLabel
+                  value="audio_only"
+                  control={<Radio size="small" />}
+                  label="Audio Only"
+                />
+              </RadioGroup>
+            </div>
           </div>
         </DialogContent>
 
@@ -585,16 +597,13 @@ export default function SpeakerSessionsPage() {
               setOpen(false);
               setEditing(null);
             }}
-            className="px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-100 transition-all"
+            className="px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-100 transition"
           >
             Cancel
           </button>
-
           <button
-            onClick={() => {
-              saveSession();
-            }}
-            className="px-4 py-2 rounded-md text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-500"
+            onClick={saveSession}
+            className="px-4 py-2 rounded-md text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition shadow-sm"
           >
             {editing?.id ? "Update" : "Add"} Session
           </button>

@@ -1,397 +1,254 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  TextField,
-  MenuItem,
-  LinearProgress,
-  Checkbox,
-  FormControlLabel,
-  Stack,
-} from "@mui/material";
-import { Autocomplete } from "@mui/material";
 import { apiGet, apiPost } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import { useAtom } from "jotai";
+import { selectedEventAtom } from "@/app/components/NavBar";
 
-// --- Types ---
-interface EventItem {
+interface Presentation {
   id: number;
-  title: string;
-  start_time: string;
-  end_time: string;
+  filename: string;
+  uploaded: boolean;
+  speaker_id: number;
+  speaker_name?: string;
 }
 
-interface SpeakerItem {
-  id: number;
-  name: string | null;
-  email: string | null;
+interface RoomStats {
+  room_name: string;
+  room_id: number | null;
+  total: number;
+  uploaded: number;
+  presentations: Presentation[];
 }
 
-interface Room {
-  id: number;
-  name: string;
+interface EventStats {
   event_id: number;
+  total_presentations: number;
+  total_uploaded: number;
+  rooms: RoomStats[];
 }
 
-interface SessionItem {
-  id: number;
-  title?: string | null;
-  room_id?: number;
-  room_name?: string;
-  session_date?: string;
-  session_time?: string;
-  uploaded?: boolean;
-  tech_notes?: {
-    own_pc: boolean;
-    video: boolean;
-    audio: boolean;
-    no_ppt: boolean;
-  };
-}
+export default function UploaderPage() {
+  const searchParams = useSearchParams();
+  const [selectedEvent] = useAtom(selectedEventAtom);
 
-export default function EventUploaderPage() {
-  // --- State ---
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
+  // FIX #9: Get eventId from URL param (set by NavBar link), no event selector UI
+  const eventIdFromUrl = searchParams.get("eventId")
+    ? Number(searchParams.get("eventId"))
+    : selectedEvent?.id ?? null;
 
-  const [speakers, setSpeakers] = useState<SpeakerItem[]>([]);
-  const [selectedSpeaker, setSelectedSpeaker] = useState<SpeakerItem | null>(
-    null,
-  );
+  const [stats, setStats] = useState<EventStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
+  const [uploadingId, setUploadingId] = useState<number | null>(null);
 
-  const [sessions, setSessions] = useState<SessionItem[]>([]);
-  const [selectedSession, setSelectedSession] = useState<SessionItem | null>(
-    null,
-  );
-
-  const [files, setFiles] = useState<FileList | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-
-  const [techNotes, setTechNotes] = useState({
-    has_video: false,
-    has_audio: false,
-    needs_internet: false,
-  });
-
-  // --- Load events on mount ---
   useEffect(() => {
-    (async () => {
-      try {
-        const evts = await apiGet<EventItem[]>("/api/events");
-        setEvents(evts);
-      } catch (err) {
-        console.error("Failed to load events:", err);
-      }
-    })();
-  }, []);
+    if (eventIdFromUrl) loadStats(eventIdFromUrl);
+  }, [eventIdFromUrl]);
 
-  // --- Load speakers for selected event ---
-  useEffect(() => {
-    if (!selectedEvent) return;
-
-    (async () => {
-      try {
-        const allSpeakers = await apiGet<SpeakerItem[]>("/api/speakers/");
-        // Optionally filter by event if your backend supports it
-        setSpeakers(allSpeakers);
-      } catch (err) {
-        console.error("Failed to load speakers:", err);
-      }
-    })();
-  }, [selectedEvent]);
-
-  // --- Select speaker and load sessions ---
-  const selectSpeaker = async (speaker: SpeakerItem) => {
-    setSelectedSpeaker(speaker);
-    setSelectedSession(null);
-    setFiles(null);
-    setProgress(0);
-    setUploading(false);
-
-    if (!speaker.id || !selectedEvent?.id) return;
-
+  const loadStats = async (eventId: number) => {
     try {
-      const [sessionsData, roomsData] = await Promise.all([
-        apiGet<SessionItem[]>(`/api/speakers/${speaker.id}/sessions`),
-        apiGet<Room[]>(`/api/events/${selectedEvent.id}/rooms`),
-      ]);
-
-      const sessionsWithExtras = sessionsData.map((s) => ({
-        ...s,
-        room_name: roomsData.find((r) => r.id === s.room_id)?.name ?? "—",
-        session_date: s.session_date || "—",
-        session_time: s.session_time || "—",
-        tech_notes: s.tech_notes ?? {
-          own_pc: false,
-          video: false,
-          audio: false,
-          no_ppt: false,
-        },
-        uploaded: s.uploaded ?? false,
-      }));
-
-      setSessions(sessionsWithExtras);
+      setLoading(true);
+      const data = await apiGet<EventStats>(`/api/events/${eventId}/stats`);
+      setStats(data);
+      // Auto-expand all rooms
+      setExpandedRooms(new Set(data.rooms.map((r) => r.room_name)));
     } catch (err) {
-      console.error("Failed to load sessions:", err);
-      setSessions([]);
+      console.error("Failed to load event stats:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // --- File select ---
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFiles(e.target.files);
+  const toggleRoom = (roomName: string) => {
+    setExpandedRooms((prev) => {
+      const next = new Set(prev);
+      if (next.has(roomName)) next.delete(roomName);
+      else next.add(roomName);
+      return next;
+    });
   };
 
-  // --- Upload files ---
-  const handleUpload = async () => {
-    if (!files || !selectedSession) {
-      alert("Please select a session and files");
-      return;
-    }
-
-    const formData = new FormData();
-
-    formData.append("event_id", String(selectedEvent?.id));
-    formData.append("session_id", String(selectedSession?.id));
-    formData.append("speaker_id", String(selectedSpeaker?.id));
-
-    Array.from(files).forEach((file) => formData.append("files", file)); // ✅ match FastAPI
-
-    formData.append("has_video", techNotes.has_video ? "true" : "false");
-    formData.append("has_audio", techNotes.has_audio ? "true" : "false");
-    formData.append(
-      "needs_internet",
-      techNotes.needs_internet ? "true" : "false",
-    );
-
+  const handleUpload = async (sessionId: number, speakerId: number, file: File) => {
     try {
-      setUploading(true);
-      setProgress(0);
+      setUploadingId(sessionId);
+      const formData = new FormData();
+      formData.append("file", file);
 
-      await apiPost(`/api/files/uploads/bulk`, formData, {}); // or /uploads/bulk if you switched to bulk endpoint
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/speakers/${speakerId}/sessions/${sessionId}/upload`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("authToken") || ""}`,
+          },
+          body: formData,
+        }
+      );
 
-      alert("Files uploaded!");
-      if (selectedSpeaker?.id) selectSpeaker(selectedSpeaker);
-      setFiles(null);
+      if (!response.ok) throw new Error("Upload failed");
+      if (eventIdFromUrl) await loadStats(eventIdFromUrl);
     } catch (err) {
-      console.error(err);
+      console.error("Upload failed:", err);
       alert("Upload failed");
     } finally {
-      setUploading(false);
-      setProgress(0);
+      setUploadingId(null);
     }
   };
 
+  if (!eventIdFromUrl) {
+    return (
+      <div className="p-8 text-center text-gray-500">
+        <p className="text-lg font-medium mb-2">No event selected</p>
+        <p className="text-sm">Please go to <a href="/events" className="text-blue-600 hover:underline">Events</a> and open an event first.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!stats) return null;
+
+  const uploadPercent = stats.total_presentations > 0
+    ? Math.round((stats.total_uploaded / stats.total_presentations) * 100)
+    : 0;
+
   return (
-    <div className="min-h-screen bg-background text-foreground py-12">
-      <div className="max-w-5xl mx-auto px-4 space-y-8">
-        {/* Event selection */}
-        <Card>
-          <CardContent>
-            <Typography variant="h6">Select Event</Typography>
-            <TextField
-              select
-              fullWidth
-              value={selectedEvent?.id ?? ""}
-              onChange={(e) => {
-                const evt = events.find(
-                  (ev) => ev.id === Number(e.target.value),
-                );
-                setSelectedEvent(evt ?? null);
-                setSelectedSpeaker(null);
-                setSessions([]);
-              }}
-            >
-              {events.map((ev) => (
-                <MenuItem key={ev.id} value={ev.id}>
-                  {ev.title}
-                </MenuItem>
-              ))}
-            </TextField>
-          </CardContent>
-        </Card>
-
-        {/* Speaker selection */}
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
+      <div className="page-header">
+        <h1 className="page-title">Presentations</h1>
         {selectedEvent && (
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Select Speaker</Typography>
-              <Autocomplete
-                options={speakers}
-                getOptionLabel={(option) =>
-                  option.name
-                    ? `${option.name} (${option.email ?? ""})`
-                    : (option.email ?? "")
-                }
-                value={selectedSpeaker}
-                onChange={(_, newValue) => {
-                  if (newValue) selectSpeaker(newValue);
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Speaker"
-                    variant="outlined"
-                    fullWidth
-                  />
-                )}
-              />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Sessions */}
-        {selectedSpeaker && sessions.length > 0 && (
-          <Card>
-            <CardContent className="space-y-4">
-              <Typography variant="h6">
-                Sessions for {selectedSpeaker.name ?? "Unknown"}
-              </Typography>
-              <Stack spacing={2}>
-                {sessions.map((s) => (
-                  <Card
-                    key={s.id}
-                    className={`p-3 cursor-pointer border ${
-                      selectedSession?.id === s.id
-                        ? "border-primary"
-                        : "border-gray-200"
-                    }`}
-                    onClick={() => setSelectedSession(s)}
-                  >
-                    <div>
-                      <strong>{s.title ?? "Untitled Session"}</strong>
-                    </div>
-                    <div>Room: {s.room_name}</div>
-                    <div>Date: {s.session_date}</div>
-                    <div>Time: {s.session_time}</div>
-                    <div>
-                      Uploaded:{" "}
-                      <span
-                        className={
-                          s.uploaded ? "text-green-600" : "text-red-600"
-                        }
-                      >
-                        {s.uploaded ? "Yes" : "No"}
-                      </span>
-                    </div>
-                  </Card>
-                ))}
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* File uploader + tech notes */}
-        {selectedSession && (
-          <Card>
-            <CardContent>
-              <Stack spacing={3}>
-                {/* Header */}
-                <Typography variant="h6">Upload Files for Session</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Step 1: Click the area below to select files.
-                  <br />
-                  Step 2: Click Upload Files to start uploading.
-                </Typography>
-
-                {/* File Select Button */}
-                <Button
-                  variant="outlined"
-                  component="label"
-                  fullWidth
-                  sx={{ borderStyle: "dashed", height: 120, fontSize: "1rem" }}
-                >
-                  Click Here to Select Files
-                  <input
-                    type="file"
-                    hidden
-                    multiple
-                    onChange={handleFileChange}
-                  />
-                </Button>
-
-                {/* Selected Files List */}
-                {files && files.length > 0 && (
-                  <Card variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Selected Files:
-                    </Typography>
-                    <ul style={{ margin: 0, paddingLeft: 20 }}>
-                      {Array.from(files).map((f, i) => (
-                        <li key={`${f.name}-${i}`}>{f.name}</li>
-                      ))}
-                    </ul>
-                  </Card>
-                )}
-
-                {/* Upload Progress */}
-                {uploading && (
-                  <LinearProgress variant="determinate" value={progress} />
-                )}
-
-                {/* Tech Notes */}
-                <Stack spacing={1}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={techNotes.has_video}
-                        onChange={(e) =>
-                          setTechNotes({
-                            ...techNotes,
-                            has_video: e.target.checked,
-                          })
-                        }
-                      />
-                    }
-                    label="Contains video"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={techNotes.has_audio}
-                        onChange={(e) =>
-                          setTechNotes({
-                            ...techNotes,
-                            has_audio: e.target.checked,
-                          })
-                        }
-                      />
-                    }
-                    label="Contains audio"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={techNotes.needs_internet}
-                        onChange={(e) =>
-                          setTechNotes({
-                            ...techNotes,
-                            needs_internet: e.target.checked,
-                          })
-                        }
-                      />
-                    }
-                    label="Requires Internet"
-                  />
-                  {/* Upload Button */}
-                  <Button
-                    variant="contained"
-                    size="large"
-                    onClick={handleUpload}
-                    disabled={!files || uploading}
-                  >
-                    {uploading ? "Uploading..." : "Upload Files"}
-                  </Button>
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
+          <p className="page-subtitle">{selectedEvent.title}</p>
         )}
       </div>
+
+      {/* FIX #9: Overall summary */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="border border-gray-200 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-gray-800">{stats.total_presentations}</p>
+          <p className="text-sm text-gray-500 mt-1">Total Presentations</p>
+        </div>
+        <div className="border border-gray-200 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-green-600">{stats.total_uploaded}</p>
+          <p className="text-sm text-gray-500 mt-1">Loaded</p>
+        </div>
+        <div className="border border-gray-200 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-orange-500">
+            {stats.total_presentations - stats.total_uploaded}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">Missing</p>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div>
+        <div className="flex justify-between text-sm text-gray-500 mb-1">
+          <span>Overall progress</span>
+          <span>{stats.total_uploaded}/{stats.total_presentations} ({uploadPercent}%)</span>
+        </div>
+        <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-green-500 rounded-full transition-all"
+            style={{ width: `${uploadPercent}%` }}
+          />
+        </div>
+      </div>
+
+      {/* FIX #9: Grouped by room */}
+      <div className="space-y-4">
+        {stats.rooms.map((room) => {
+          const isExpanded = expandedRooms.has(room.room_name);
+          const roomPercent = room.total > 0 ? Math.round((room.uploaded / room.total) * 100) : 0;
+
+          return (
+            <div key={room.room_name} className="border border-gray-200 rounded-xl overflow-hidden">
+              {/* Room header */}
+              <button
+                onClick={() => toggleRoom(room.room_name)}
+                className="w-full flex items-center justify-between px-5 py-4 bg-gray-50 hover:bg-gray-100 transition text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-gray-800">{room.room_name}</span>
+                  {/* FIX #9: x/y count per room */}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    room.uploaded === room.total && room.total > 0
+                      ? "bg-green-100 text-green-700"
+                      : "bg-orange-100 text-orange-700"
+                  }`}>
+                    {room.uploaded}/{room.total} loaded
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 rounded-full"
+                      style={{ width: `${roomPercent}%` }}
+                    />
+                  </div>
+                  <span className="text-sm text-gray-400">{isExpanded ? "▲" : "▼"}</span>
+                </div>
+              </button>
+
+              {/* Room presentations list */}
+              {isExpanded && (
+                <div className="divide-y divide-gray-100">
+                  {room.presentations.length === 0 ? (
+                    <p className="text-gray-400 text-sm px-5 py-4">No presentations assigned to this room.</p>
+                  ) : (
+                    room.presentations.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between px-5 py-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{p.filename}</p>
+                          {p.speaker_name && (
+                            <p className="text-xs text-gray-400">{p.speaker_name}</p>
+                          )}
+                        </div>
+                        <div className="ml-4 flex items-center gap-3">
+                          {p.uploaded ? (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                              ✓ Loaded
+                            </span>
+                          ) : (
+                            <label className="cursor-pointer">
+                              <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold border border-red-200 hover:bg-red-200 transition">
+                                {uploadingId === p.id ? "Uploading..." : "Upload"}
+                              </span>
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept=".ppt,.pptx,.pdf,.key"
+                                disabled={uploadingId === p.id}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUpload(p.id, p.speaker_id, file);
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {stats.rooms.length === 0 && (
+        <div className="text-center py-12 text-gray-400">
+          <p className="text-lg">No presentations found for this event.</p>
+          <p className="text-sm mt-1">Add speakers and sessions to get started.</p>
+        </div>
+      )}
     </div>
   );
 }
