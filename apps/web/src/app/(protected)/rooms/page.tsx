@@ -119,25 +119,47 @@ export default function RoomsPage() {
   };
 
   // FIX #1: Add a room globally, then assign to event
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const saveRoom = async () => {
     if (!editingRoom) return;
-    if (!validateFields(editingRoom, ["name"])) return;
+    setSaveError(null);
 
-    if (editingRoom.id) {
-      await apiPut(`/api/rooms/${editingRoom.id}`, editingRoom);
-    } else {
-      const created = await apiPost<Partial<Room>, Room>(
-        "/api/rooms",
-        editingRoom,
-      );
-      // Assign to event if we have one
-      if (eventId && created.id) {
-        await apiPost(`/api/events/${eventId}/rooms/${created.id}`, {});
+    // Validate required fields
+    if (!editingRoom.name?.trim()) {
+      setSaveError("Room Name is required.");
+      return;
+    }
+    if (!editingRoom.capacity || editingRoom.capacity < 1) {
+      setSaveError("Capacity is required and must be at least 1.");
+      return;
+    }
+
+    try {
+      if (editingRoom.id) {
+        await apiPut(`/api/rooms/${editingRoom.id}`, editingRoom);
+      } else {
+        const created = await apiPost<Partial<Room>, Room>(
+          "/api/rooms",
+          editingRoom,
+        );
+        if (eventId && created.id) {
+          await apiPost(`/api/events/${eventId}/rooms/${created.id}`, {});
+        }
+      }
+      setIsModalOpen(false);
+      setEditingRoom(null);
+      load();
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "response" in err) {
+        const axiosErr = err as { response?: { data?: { detail?: string } } };
+        setSaveError(axiosErr.response?.data?.detail ?? "Failed to save room");
+      } else {
+        setSaveError(
+          err instanceof Error ? err.message : "Failed to save room",
+        );
       }
     }
-    setIsModalOpen(false);
-    setEditingRoom(null);
-    load();
   };
 
   // FIX #2: Load sessions for a room
@@ -329,48 +351,96 @@ export default function RoomsPage() {
             <h2 className="text-lg font-semibold mb-4">
               {editingRoom.id ? "Edit Room" : "Add Room"}
             </h2>
+
+            {saveError && (
+              <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                {saveError}
+              </div>
+            )}
+
             {[
-              { key: "name", label: "Room Name", required: true },
-              { key: "ip_address", label: "IP Address" },
-              { key: "capacity", label: "Capacity", type: "number" },
-              { key: "location", label: "Location" },
-              { key: "layout", label: "Layout" },
-              { key: "equipment", label: "Equipment" },
-            ].map((f) => (
-              <input
-                key={f.key}
-                type={f.type || "text"}
-                placeholder={f.label}
-                value={
-                  (
-                    editingRoom as unknown as Record<
-                      string,
-                      string | number | undefined
-                    >
-                  )[f.key] ?? ""
-                }
-                onChange={(e) =>
-                  setEditingRoom({
-                    ...editingRoom,
-                    [f.key]:
-                      f.type === "number"
-                        ? Number(e.target.value)
-                        : e.target.value,
-                  })
-                }
-                className="w-full border rounded px-3 py-2 mb-2"
-              />
-            ))}
+              { key: "name", label: "Room Name", required: true, type: "text" },
+              {
+                key: "capacity",
+                label: "Capacity",
+                required: true,
+                type: "number",
+              },
+              {
+                key: "ip_address",
+                label: "IP Address",
+                required: false,
+                type: "text",
+              },
+              {
+                key: "location",
+                label: "Location",
+                required: false,
+                type: "text",
+              },
+              { key: "layout", label: "Layout", required: false, type: "text" },
+              {
+                key: "equipment",
+                label: "Equipment",
+                required: false,
+                type: "text",
+              },
+            ].map((f) => {
+              const val =
+                (
+                  editingRoom as unknown as Record<
+                    string,
+                    string | number | undefined
+                  >
+                )[f.key] ?? "";
+              const isEmpty =
+                f.required && (val === "" || val === 0 || val === undefined);
+              return (
+                <div key={f.key} className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {f.label}
+                    {f.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <input
+                    type={f.type}
+                    placeholder={f.label}
+                    value={val}
+                    min={f.type === "number" ? 1 : undefined}
+                    onChange={(e) =>
+                      setEditingRoom({
+                        ...editingRoom,
+                        [f.key]:
+                          f.type === "number"
+                            ? Number(e.target.value)
+                            : e.target.value,
+                      })
+                    }
+                    className={`w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                      isEmpty ? "border-red-400 bg-red-50" : "border-gray-300"
+                    }`}
+                  />
+                  {isEmpty && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {f.label} is required
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+
             <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-3 py-1 rounded bg-gray-100"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setSaveError(null);
+                }}
+                className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={saveRoom}
-                className="px-4 py-1 rounded bg-blue-600 text-white"
+                className="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
               >
                 Save
               </button>

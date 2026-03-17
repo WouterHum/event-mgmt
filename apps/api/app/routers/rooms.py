@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError
 from ..db import get_db
 from ..models import Room, Upload
 from ..deps import require_roles
@@ -45,22 +46,48 @@ def list_rooms(db: Session = Depends(get_db)):
 ]
 
 @router.post("/")
-def add_room(payload: dict, db: Session = Depends(get_db), user=Depends(require_roles("admin"))):
-    room = Room(**payload)
-    db.add(room); db.commit(); db.refresh(room)
-    return room
-
-@router.post("/")
 def create_room(room: dict, db: Session = Depends(get_db)):
     """Add new room"""
-    # Remove event_id if present since Room table doesn't have it
     room_data = {k: v for k, v in room.items() if k != "event_id"}
-    
-    db_room = Room(**room_data)
-    db.add(db_room)
-    db.commit()
-    db.refresh(db_room)
-    return db_room
+
+    # Check for duplicate name first
+    existing = db.query(Room).filter(Room.name == room_data.get("name")).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A room named '{room_data.get('name')}' already exists. Please use a different name."
+        )
+
+    # Set defaults for optional fields
+    if not room_data.get("capacity"):
+        room_data["capacity"] = 0
+    if not room_data.get("location"):
+        room_data["location"] = ""
+    if not room_data.get("layout"):
+        room_data["layout"] = ""
+    if not room_data.get("equipment"):
+        room_data["equipment"] = ""
+    if not room_data.get("ip_address"):
+        room_data["ip_address"] = None
+
+    try:
+        db_room = Room(**room_data)
+        db.add(db_room)
+        db.commit()
+        db.refresh(db_room)
+        return db_room
+    except IntegrityError as e:
+        db.rollback()
+        error_msg = str(e.orig) if hasattr(e, "orig") else str(e)
+        if "Duplicate entry" in error_msg:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A room named '{room_data.get('name')}' already exists. Please use a different name."
+            )
+        raise HTTPException(status_code=400, detail=f"Database error: {error_msg}")
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create room")
 
 @router.put("/{room_id}")
 def update_room(room_id: int, room: dict, db: Session = Depends(get_db)):
